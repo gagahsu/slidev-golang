@@ -781,7 +781,8 @@ func TestAverageTable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) { // 子測試：每個案例獨立回報
 			if got := Average(tt.nums); got != tt.want {
-				t.Errorf("Average(%v) = %v，期望 %v", tt.nums, got, tt.want)
+				t.Errorf("Average(%v) = %v，期望 %v",
+					tt.nums, got, tt.want)
 			}
 		})
 	}
@@ -1008,7 +1009,8 @@ func TestStrength(t *testing.T) {
 				t.Fatalf("錯誤 = %v，期望 %v", err, tt.wantErr)
 			}
 			if got != tt.want {
-				t.Errorf("Strength(%q) = %d，期望 %d", tt.pw, got, tt.want)
+				t.Errorf("Strength(%q) = %d，期望 %d",
+					tt.pw, got, tt.want)
 			}
 		})
 	}

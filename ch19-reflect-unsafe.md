@@ -103,6 +103,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.95
+---
 
 # 什麼是反射？
 
@@ -132,6 +134,8 @@ reflect 套件有兩個核心型別：Type 描述「型別」，Value 描述「�
 表格下半部是使用反射的標準函式庫，大家從第一章就在用了：fmt.Println 之所以能印出任何型別，就是因為它用反射查看傳進來的值。
 -->
 
+---
+zoom: 0.91
 ---
 
 # TypeOf() 和 ValueOf()
@@ -216,6 +220,8 @@ func main() {
 -->
 
 ---
+zoom: 0.84
+---
 
 # 取得結構的欄位名稱、型別與其值
 
@@ -260,6 +266,8 @@ encoding/json 做的事情本質上就是這樣：走訪每個欄位、讀取標
 注意 cost 是小寫開頭的未匯出欄位，IsExported 回傳 false。反射可以「看到」未匯出的欄位，但不能讀取或修改它的值，呼叫 Interface() 會 panic。這就是為什麼第 11 章說「只有匯出的欄位會被 JSON 處理」。
 -->
 
+---
+zoom: 0.88
 ---
 
 # 補充：Go 1.26+ 用迭代器走訪欄位
@@ -370,7 +378,19 @@ type Product struct {
 	Price int
 	stock int
 }
+```
 
+<!--
+先準備測試用的型別：自訂整數型別 Age，以及有一個未匯出欄位 stock 的 Product 結構。
+-->
+
+---
+
+# 練習：解題提示（續）
+### 提示說明
+
+```go
+// 續上頁
 func describe(v any) string {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
@@ -395,14 +415,14 @@ func describe(v any) string {
 <!--
 describe 用 rv.Kind() 做 switch。第一個 case 列出了五種整數的 Kind，Age 的 Kind 是 Int，所以會匹配到這裡。rv.Int() 以 int64 的形式取出整數值。
 
-String、Slice、Map 都可以用 rv.Len() 取得長度。
-
-Pointer 的時候，用 Elem() 取得指向的值，Interface() 轉回 any，再遞迴呼叫 describe。
+String、Slice、Map 都可以用 rv.Len() 取得長度。Pointer 的時候，用 Elem() 取得指向的值，Interface() 轉回 any，再遞迴呼叫 describe。
 -->
 
 ---
+zoom: 0.86
+---
 
-# 練習：解題提示（續）
+# 練習：解題提示（續 2）
 ### 提示說明
 
 ```go
@@ -442,6 +462,8 @@ main 準備了各種不同的值。Age(18) 被正確地辨識成整數，這是�
 這個練習寫出來的 describe，其實就是 fmt 套件處理 %v 的迷你版。
 -->
 
+---
+zoom: 0.88
 ---
 
 # DeepEqual：深度比較任意值
@@ -526,6 +548,8 @@ unsafe 套件就是繞過這些保護的「後門」。它可以查詢記憶體�
 -->
 
 ---
+zoom: 0.86
+---
 
 # 記憶體配置：Sizeof、Alignof、Offsetof
 
@@ -569,6 +593,8 @@ CPU 讀取記憶體時，希望資料的位址是自己大小的倍數，這叫�
 最後一行：字串佔 16 個位元組，是一個指標加一個長度；切片佔 24 個位元組，是指標、長度、容量。這就是第 3 章和第 4 章說的字串和切片的內部結構，unsafe.Sizeof 證實了它。
 -->
 
+---
+zoom: 0.87
 ---
 
 # unsafe.Pointer 指標
@@ -651,6 +677,8 @@ Go 1.17 加入的 unsafe.Add 把這個模式包裝起來，意圖更清楚、也
 -->
 
 ---
+zoom: 0.83
+---
 
 # 零複製轉換：unsafe.String 與 unsafe.Slice（Go 1.20+）
 
@@ -692,6 +720,8 @@ Go 1.20 加入了四個函式，用來在字串、切片和指標之間做「零
 所以使用前提是：轉換之後，原本的 []byte 絕對不能再修改。一般情況下，請直接用 string(b)。
 -->
 
+---
+zoom: 0.91
 ---
 
 # Go 語言標準套件中的 unsafe
@@ -778,7 +808,19 @@ type SignUp struct {
 	Email string `validate:"required"`
 	Age   int    `validate:"min=18"`
 }
+```
 
+<!--
+SignUp 結構的每個欄位都用 validate 標籤描述規則，多個規則用逗號分隔。
+-->
+
+---
+
+# 綜合練習：解題提示（續）
+### 提示說明
+
+```go
+// 續上頁
 func Validate(v any) error {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() == reflect.Pointer {
@@ -805,8 +847,10 @@ Validate 先處理指標：如果傳入的是指標，用 Elem 取得指向的�
 -->
 
 ---
+zoom: 0.75
+---
 
-# 綜合練習：解題提示（續）
+# 綜合練習：解題提示（續 2）
 ### 提示說明
 
 ```go

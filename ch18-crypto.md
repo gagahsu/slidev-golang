@@ -967,6 +967,8 @@ Go 的原始碼裡附了一個產生憑證的小工具 generate_cert.go，用 go
 -->
 
 ---
+zoom: 0.84
+---
 
 # 用 Go 程式產生 ECDSA 自簽署憑證
 
@@ -1049,10 +1051,11 @@ import (
 
 func main() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		v := tls.VersionName(r.TLS.Version)
-		fmt.Fprintf(w, "Hello over %s\n", v)
-	})
+	mux.HandleFunc("GET /",
+		func(w http.ResponseWriter, r *http.Request) {
+			v := tls.VersionName(r.TLS.Version)
+			fmt.Fprintf(w, "Hello over %s\n", v)
+		})
 	srv := &http.Server{
 		Addr:              ":8443",
 		Handler:           mux,

@@ -352,7 +352,7 @@ layout: default
 -->
 
 ---
-zoom: 0.86
+zoom: 0.84
 ---
 
 # 練習 1：解題提示
@@ -472,7 +472,7 @@ func main() {
 -->
 
 ---
-zoom: 0.9
+zoom: 0.86
 ---
 
 # 設定時區來取得新時間值
@@ -781,7 +781,9 @@ zoom: 0.97
 func main() {
 	today := time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC)
 	list := parseAll(map[string]string{
-		"Alice": "2026-10-01", "Bob": "2026-09-20", "Carol": "2027-01-15",
+		"Alice": "2026-10-01",
+		"Bob":   "2026-09-20",
+		"Carol": "2027-01-15",
 	})
 	for _, m := range list {
 		days := int(m.expire.Sub(today).Hours() / 24)

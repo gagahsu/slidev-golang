@@ -1159,7 +1159,8 @@ func decodeProduct(w http.ResponseWriter,
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&p); err != nil {
-		writeError(w, http.StatusBadRequest, "JSON 格式錯誤："+err.Error())
+		msg := "JSON 格式錯誤：" + err.Error()
+		writeError(w, http.StatusBadRequest, msg)
 		return p, false
 	}
 	if p.Name == "" || p.Price < 0 {
@@ -1483,7 +1484,8 @@ func (a *API) listTodos(w http.ResponseWriter, r *http.Request) {
 	if v := r.URL.Query().Get("done"); v != "" {
 		want, err := strconv.ParseBool(v)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "done 必須是 true 或 false")
+			msg := "done 必須是 true 或 false"
+			writeError(w, http.StatusBadRequest, msg)
 			return
 		}
 		list = slices.DeleteFunc(list, func(t Todo) bool {

@@ -1122,7 +1122,8 @@ ReadAll 一次把所有紀錄讀成一個二維的字串切片，適合檔案不
 	for i, row := range rows[1:] {
 		price, err := strconv.Atoi(row[priceIdx])
 		if err != nil {
-			fmt.Printf("第 %d 筆 %s 價格錯誤：%v\n", i+2, row[nameIdx], err)
+			fmt.Printf("第 %d 筆 %s 價格錯誤：%v\n",
+				i+2, row[nameIdx], err)
 			continue
 		}
 		total += price

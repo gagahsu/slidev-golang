@@ -1204,7 +1204,8 @@ func main() {
 	}
 	for _, t := range loaded.Items {
 		if !t.Done {
-			fmt.Println("未完成：", t.Title, t.DueAt.Format(time.DateTime))
+			due := t.DueAt.Format(time.DateTime)
+			fmt.Println("未完成：", t.Title, due)
 		}
 	}
 	typo := `{"owner":"x","items":[{"id":1,"titel":"typo"}]}`

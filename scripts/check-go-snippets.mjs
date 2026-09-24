@@ -63,20 +63,22 @@ for (const file of files) {
     const code = lines.slice(start, end).join('\n')
     i = end
     if (/^\s*\/\/ 續上頁/.test(code)) {
-      if (last) last.files.at(-1).code += (code.startsWith('\t') ? '\n' : '\n\n') + code // 以 Tab 縮排的續上頁：函式本體中途接續
+      if (last?.files) last.files.at(-1).code += (code.startsWith('\t') ? '\n' : '\n\n') + code // 以 Tab 縮排的續上頁：函式本體中途接續
       continue
     }
     if (!/^\s*package \w+/.test(stripComments(code))) continue
-    if (skipMarked || /^\s*([^\s/].*)?\/\/\s*編譯錯誤/m.test(code) || skipRe.test(code)) {
+    const named = code.match(/^\/\/ 檔名：(\S+\.go)/)
+    if (skipMarked || /^\s*([^\s/].*)?\/\/\s*編譯錯誤/m.test(code) || skipRe.test(code) ||
+        (named && last?.skippedProject)) {
       skipped++
-      last = null
+      // 多檔案專案中有檔案被略過時，同一專案的其他檔案也一併略過
+      last = named ? { skippedProject: true } : null
       continue
     }
-    const named = code.match(/^\/\/ 檔名：(\S+\.go)/)
     const name = named ? named[1].split('/').pop()
       : code.includes('"testing"') ? 'x_test.go' : 'main.go'
     const pkgOf = c => stripComments(c).match(/^\s*package (\w+)/)?.[1]
-    if (named && last?.named && pkgOf(last.files[0].code) === pkgOf(code) && !last.files.some(f => f.name === name)) {
+    if (named && last?.named && last.files && pkgOf(last.files[0].code) === pkgOf(code) && !last.files.some(f => f.name === name)) {
       last.files.push({ name, code }) // 同一個套件的另一個檔案（例如測試檔）
       continue
     }
