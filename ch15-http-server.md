@@ -103,6 +103,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.82
+---
 
 # 使用 HTTP 請求處理器 (handler)
 
@@ -147,6 +149,8 @@ main 裡面，HandleFunc 把路徑 "/" 對應到 hello 函式，然後 ListenAnd
 -->
 
 ---
+zoom: 0.9
+---
 
 # http.Handler 介面
 
@@ -189,6 +193,8 @@ HandleFunc 其實是一個方便的包裝：它把一般的函式轉換成 Handl
 補充一個重要的觀念：Go 的 HTTP 伺服器會為每一個請求啟動一個 goroutine，所以多個請求會同時執行 ServeHTTP，這個 Counter 其實有「資料競爭」的問題，第 16 章會學怎麼用互斥鎖解決。
 -->
 
+---
+zoom: 0.87
 ---
 
 # 簡單的 routing（路由）控制：ServeMux
@@ -404,6 +410,8 @@ layout: default
 -->
 
 ---
+zoom: 0.94
+---
 
 # 練習 1：解題提示
 ### 提示說明
@@ -439,6 +447,8 @@ func bmi(hCm, wKg float64) string {
 把「商業邏輯」和「HTTP 處理」分開，是寫伺服器很重要的原則。
 -->
 
+---
+zoom: 0.79
 ---
 
 # 練習 1：解題提示（續）
@@ -585,6 +595,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.97
+---
 
 # 讀取靜態 HTML 網頁：http.ServeFile
 
@@ -659,6 +671,8 @@ FileServer 會自動防止路徑穿越攻擊，請求 /assets/../main.go 是拿�
 -->
 
 ---
+zoom: 0.93
+---
 
 # 把靜態資源編譯進執行檔：embed
 
@@ -701,6 +715,8 @@ embed.FS 實作了 fs.FS 介面，Go 1.22 加入的 http.FileServerFS 可以直�
 這段程式需要專案裡真的有 static 資料夾才能編譯。
 -->
 
+---
+zoom: 0.81
 ---
 
 # 使用模板檔案產生動態網頁
@@ -885,6 +901,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.91
+---
 
 # API 的資料層：記憶體中的商品儲存庫
 
@@ -924,6 +942,8 @@ func NewStore() *Store {
 Product 加上 JSON 標籤，因為它會直接編碼成 API 的回應。
 -->
 
+---
+zoom: 0.79
 ---
 
 # API 的資料層（續）
@@ -1004,6 +1024,8 @@ Update 和 Delete 也都先檢查商品存不存在，不存在就回傳 ErrNotF
 -->
 
 ---
+zoom: 0.97
+---
 
 # 回傳 JSON 的輔助函式
 
@@ -1079,6 +1101,8 @@ get 先讀取路徑參數並轉成數字，失敗回傳 400；接著查詢商品
 -->
 
 ---
+zoom: 0.97
+---
 
 # 處理器：新增、更新與刪除
 
@@ -1115,6 +1139,8 @@ func (a *API) create(w http.ResponseWriter, r *http.Request) {
 create 只要三行：解析成功就新增，回傳 201 Created 和新增後的商品，包含伺服器指定的 ID。
 -->
 
+---
+zoom: 0.86
 ---
 
 # 處理器：新增、更新與刪除（續）
@@ -1194,6 +1220,8 @@ logging 記錄每個請求的方法、路徑、狀態碼和花費的時間，使
 -->
 
 ---
+zoom: 0.77
+---
 
 # 組合路由並啟動伺服器（含優雅關閉）
 
@@ -1241,6 +1269,8 @@ main 把所有東西組合起來。
 Handler 設定成 logging(mux)，用中介軟體包住整個路由器，所有請求都會被記錄。
 -->
 
+---
+zoom: 0.97
 ---
 
 # 組合路由並啟動伺服器（含優雅關閉）（續）
@@ -1321,6 +1351,8 @@ curl -X POST localhost:8080/api/products -d '{"nme":"x"}'
 -->
 
 ---
+zoom: 0.91
+---
 
 # 補充：用 httptest 替處理器寫單元測試
 
@@ -1364,6 +1396,7 @@ net/http/httptest 套件提供了測試用的工具：NewRequest 建立一個假
 
 ---
 layout: default
+zoom: 0.96
 ---
 
 # 綜合練習：待辦事項 API
@@ -1391,6 +1424,8 @@ layout: default
 完成之後，試著用 curl 把每一個 API 都呼叫一次，確認狀態碼都正確。
 -->
 
+---
+zoom: 0.85
 ---
 
 # 綜合練習：解題提示

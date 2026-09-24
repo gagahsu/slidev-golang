@@ -506,6 +506,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.88
+---
 
 # 送出 POST 請求並接收回應
 
