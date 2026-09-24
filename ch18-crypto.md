@@ -133,6 +133,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.91
+---
 
 # 什麼是雜湊函式？
 
@@ -161,6 +163,8 @@ class: flex flex-col justify-center items-center text-center
 MD5 已經被攻破了，可以刻意製造出雜湊值相同的兩份資料，所以不能再用在安全的用途。目前的主流是 SHA-2 家族，SHA-3 是新一代的標準。
 -->
 
+---
+zoom: 0.84
 ---
 
 # 使用 MD5、SHA-2、SHA-3
@@ -206,6 +210,8 @@ Go 的雜湊函式用法非常一致：套件名稱加上 Sum，傳入 []byte，
 -->
 
 ---
+zoom: 0.83
+---
 
 # 計算檔案的雜湊值：hash.Hash 介面
 
@@ -248,6 +254,8 @@ sha256.New() 回傳一個 hash.Hash，它實作了 io.Writer 介面，所以可�
 實務上，軟體下載頁面常常會附上 SHA-256 值，下載完用這個方法計算一次，比對一樣，就代表檔案完整、沒有被竄改。
 -->
 
+---
+zoom: 0.79
 ---
 
 # HMAC：加上金鑰的雜湊
@@ -371,7 +379,19 @@ var algos = map[string]func() hash.Hash{
 	"sha256": sha256.New,
 	"sha3":   func() hash.Hash { return sha3.New256() },
 }
+```
 
+<!--
+algos 是一個 map，把演算法名稱對應到建立 hash.Hash 的函式。md5.New 和 sha256.New 的型別剛好就是 func() hash.Hash，可以直接放進去；sha3.New256 回傳的是 *sha3.SHA3，所以用一個匿名函式包裝一下。
+-->
+
+---
+
+# 練習 1：解題提示（續）
+### 提示說明
+
+```go
+// 續上頁
 func sum(newHash func() hash.Hash, path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -387,14 +407,14 @@ func sum(newHash func() hash.Hash, path string) (string, error) {
 ```
 
 <!--
-algos 是一個 map，把演算法名稱對應到建立 hash.Hash 的函式。md5.New 和 sha256.New 的型別剛好就是 func() hash.Hash，可以直接放進去；sha3.New256 回傳的是 *sha3.SHA3，所以用一個匿名函式包裝一下。
-
-sum 函式接收「建立雜湊的函式」和檔案路徑，用 io.Copy 串流計算。
+sum 函式接收「建立雜湊的函式」和檔案路徑，開啟檔案、用 io.Copy 串流計算，最後用 %x 格式化成十六進位字串。
 -->
 
 ---
+zoom: 0.84
+---
 
-# 練習 1：解題提示（續）
+# 練習 1：解題提示（續 2）
 ### 提示說明
 
 ```go
@@ -471,6 +491,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.79
+---
 
 # 對稱式加密法：AES + GCM
 
@@ -518,6 +540,8 @@ Seal 加密、Open 解密。密文比明文多了 28 個位元組：12 個是 no
 -->
 
 ---
+zoom: 0.87
+---
 
 # 使用 AES-GCM 的注意事項
 
@@ -560,6 +584,8 @@ func main() {
 第三，金鑰的保管。加密再強，金鑰被偷就沒用了。金鑰不能寫在程式碼裡，實務上從環境變數讀取，大型系統會用雲端的金鑰管理服務（KMS）。
 -->
 
+---
+zoom: 0.81
 ---
 
 # 非對稱式加密法：RSA-OAEP
@@ -606,6 +632,8 @@ rsa.GenerateKey 產生一對金鑰，長度至少要 2048 位元，Go 1.24 以�
 注意 RSA 能加密的資料量很小，2048 位元的金鑰大約只能加密 190 個位元組，所以它通常只用來加密一把 AES 金鑰，而不是加密整份資料。這就是剛剛說的「兩者搭配使用」。
 -->
 
+---
+zoom: 0.81
 ---
 
 # 補充：把金鑰存成 PEM 檔案
@@ -665,6 +693,8 @@ class: flex flex-col justify-center items-center text-center
 接下來是數位簽章：證明「這份資料確實是我發出的，而且沒有被改過」。
 -->
 
+---
+zoom: 0.93
 ---
 
 # 數位簽章：Ed25519
@@ -750,6 +780,8 @@ Alice 要傳一段**很長**的機密訊息給 Bob，並證明是自己發的：
 -->
 
 ---
+zoom: 0.84
+---
 
 # 練習 2：解題提示
 ### 提示說明
@@ -789,6 +821,8 @@ func newGCM(key []byte) cipher.AEAD {
 newGCM 是一個輔助函式，把 AES 金鑰轉換成 GCM 物件。金鑰長度是我們自己控制的，不會出錯，所以錯誤直接 panic。
 -->
 
+---
+zoom: 0.84
 ---
 
 # 練習 2：解題提示（續）
@@ -965,6 +999,20 @@ func main() {
 		KeyUsage:     x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}
+```
+
+<!--
+也可以用 Go 程式自己產生憑證，這樣更能理解憑證裡有什麼。
+
+ecdsa.GenerateKey 產生一把 P-256 曲線的 ECDSA 金鑰。x509.Certificate 是憑證的範本：序號、組織名稱、適用的網域名稱和 IP、有效期間、用途。
+-->
+
+---
+
+# 用 Go 程式產生 ECDSA 自簽署憑證（續）
+
+```go
+	// 續上頁
 	// 自簽署：簽發者（第 3 個參數）就是自己
 	der, _ := x509.CreateCertificate(rand.Reader, tmpl, tmpl,
 		&key.PublicKey, key)
@@ -977,15 +1025,13 @@ func main() {
 ```
 
 <!--
-也可以用 Go 程式自己產生憑證，這樣更能理解憑證裡有什麼。
-
-ecdsa.GenerateKey 產生一把 P-256 曲線的 ECDSA 金鑰。x509.Certificate 是憑證的範本：序號、組織名稱、適用的網域名稱和 IP、有效期間、用途。
-
 CreateCertificate 的第二和第三個參數都是 tmpl，意思是「簽發者就是自己」，這就是「自簽署」的意思。正式的憑證，簽發者會是 CA。最後用 CA 的私鑰（這裡就是自己的私鑰）替憑證簽章。
 
 最後跟剛剛的 RSA 金鑰一樣，轉成 PEM 格式存檔，私鑰用 0o600 權限。
 -->
 
+---
+zoom: 0.76
 ---
 
 # HTTPS 伺服器
@@ -1057,7 +1103,20 @@ func main() {
 	}
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(caPEM) // 把自簽署憑證加入「信任清單」
+```
 
+<!--
+Go 的 HTTP 客戶端預設也會驗證憑證，連線到自簽署憑證的伺服器會出現 certificate signed by unknown authority 的錯誤。
+
+正確的做法是：把這張自簽署憑證加入客戶端的「信任清單」。x509.NewCertPool 建立一個憑證池，AppendCertsFromPEM 把憑證加進去。
+-->
+
+---
+
+# HTTPS 客戶端：信任自簽署憑證（續）
+
+```go
+	// 續上頁
 	client := &http.Client{Transport: &http.Transport{
 		TLSClientConfig: &tls.Config{
 			RootCAs:    pool,
@@ -1075,13 +1134,9 @@ func main() {
 ```
 
 <!--
-Go 的 HTTP 客戶端預設也會驗證憑證，連線到自簽署憑證的伺服器會出現 certificate signed by unknown authority 的錯誤。
+再把憑證池設定到 TLSClientConfig 的 RootCAs。這樣客戶端就只信任這張憑證，其他的驗證照常進行。
 
-正確的做法是：把這張自簽署憑證加入客戶端的「信任清單」。x509.NewCertPool 建立一個憑證池，AppendCertsFromPEM 把憑證加進去，再設定到 TLSClientConfig 的 RootCAs。這樣客戶端就只信任這張憑證，其他的驗證照常進行。
-
-連線成功後，伺服器回傳 Hello over TLS 1.3。
-
-公司內部的服務之間互相呼叫，如果使用公司自己的 CA，也是用同樣的方式設定。
+連線成功後，伺服器回傳 Hello over TLS 1.3。公司內部的服務之間互相呼叫，如果使用公司自己的 CA，也是用同樣的方式設定。
 -->
 
 ---
@@ -1160,7 +1215,19 @@ func gcmFor(key []byte) (cipher.AEAD, error) {
 	}
 	return cipher.NewGCMWithRandomNonce(block)
 }
+```
 
+<!--
+gcmFor 把金鑰轉成 GCM 物件。金鑰長度不對時，aes.NewCipher 會回傳錯誤。
+-->
+
+---
+
+# 綜合練習：解題提示（續）
+### 提示說明
+
+```go
+// 續上頁
 func encryptFile(key []byte, in, out string) error {
 	plain, err := os.ReadFile(in)
 	if err != nil {
@@ -1179,14 +1246,12 @@ func encryptFile(key []byte, in, out string) error {
 ```
 
 <!--
-gcmFor 把金鑰轉成 GCM 物件。金鑰長度不對時，aes.NewCipher 會回傳錯誤。
-
 encryptFile 讀取明文的設定檔、加密、計算密文的 SHA-256 寫到 .sha256 檔，最後把密文寫入，權限 0600。
 -->
 
 ---
 
-# 綜合練習：解題提示（續）
+# 綜合練習：解題提示（續 2）
 ### 提示說明
 
 ```go
@@ -1207,7 +1272,19 @@ func decryptFile(key []byte, path string) (map[string]any, error) {
 	var cfg map[string]any
 	return cfg, json.Unmarshal(plain, &cfg)
 }
+```
 
+<!--
+decryptFile 讀取密文、解密、解析 JSON。解密失敗時，不管是檔案被改過還是金鑰錯誤，都回傳同一個籠統的錯誤訊息，不要透露太多細節給可能的攻擊者。
+-->
+
+---
+
+# 綜合練習：解題提示（續 3）
+### 提示說明
+
+```go
+// 續上頁
 func main() {
 	key, err := hex.DecodeString(os.Getenv("CONFIG_KEY"))
 	if err != nil || len(key) != 32 {
@@ -1225,8 +1302,6 @@ func main() {
 ```
 
 <!--
-decryptFile 讀取密文、解密、解析 JSON。解密失敗時，不管是檔案被改過還是金鑰錯誤，都回傳同一個籠統的錯誤訊息，不要透露太多細節給可能的攻擊者。
-
 main 從環境變數讀取金鑰，用 hex.DecodeString 轉成位元組，長度不是 32 就結束。接著建立一個範例設定檔、加密、再解密讀回來。
 
 執行方式：export CONFIG_KEY=$(openssl rand -hex 32)，再 go run .。
