@@ -99,6 +99,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.93
+---
 
 # 最基本的方式：os.Args
 
@@ -140,6 +142,8 @@ go run . Alice Bob
 os.Args 適合很簡單的情況；如果有很多選項，就要用 flag 套件。
 -->
 
+---
+zoom: 0.91
 ---
 
 # 使用 flag 套件定義旗標
@@ -185,6 +189,8 @@ flag 套件是 Go 標準函式庫提供的命令列解析工具。
 命令列上旗標的寫法很彈性：-port=9000 或 -port 9000 都可以，布林旗標只要寫 -v 就代表 true。
 -->
 
+---
+zoom: 0.76
 ---
 
 # 使用 flag 的注意事項
@@ -314,6 +320,8 @@ func main() {
 -->
 
 ---
+zoom: 0.78
+---
 
 # 現代寫法：signal.NotifyContext
 
@@ -374,7 +382,7 @@ class: flex flex-col justify-center items-center text-center
 
 ---
 
-# 檔案存取權限
+# 檔案存取權限：rwx 與八進位
 
 Unix 系統的權限分為三組對象，每組有**讀（r=4）、寫（w=2）、執行（x=1）**三種權限
 
@@ -399,6 +407,8 @@ Linux 和 macOS 的檔案權限，分成三組對象：擁有者、同群組的�
 在 Go 裡用 0o 開頭表示八進位，型別是 fs.FileMode。Windows 的權限系統不一樣，Go 在 Windows 上只會參考是否唯讀。
 -->
 
+---
+zoom: 0.94
 ---
 
 # 查詢與修改權限
@@ -451,6 +461,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.95
+---
 
 # 用 os 套件新建檔案
 
@@ -489,6 +501,8 @@ os.Create 會建立一個新檔案，回傳 *os.File 和錯誤。如果檔案已
 為什麼一定要關閉？作業系統對每個程式能同時開啟的檔案數量有上限，通常是 1024 個。如果在迴圈裡開檔案卻忘了關，很快就會遇到 too many open files 的錯誤。
 -->
 
+---
+zoom: 0.96
 ---
 
 # 對檔案寫入字串
@@ -564,6 +578,8 @@ func main() {
 -->
 
 ---
+zoom: 0.88
+---
 
 # 檢查檔案是否存在
 
@@ -605,6 +621,8 @@ Go 沒有直接的「檔案存在嗎」函式，標準做法是呼叫 os.Stat，
 -->
 
 ---
+zoom: 0.96
+---
 
 # 一次讀取整個檔案內容：os.ReadFile
 
@@ -643,6 +661,8 @@ os.ReadFile 一次把整個檔案讀進記憶體，回傳 []byte。要當成字�
 使用 ReadFile 的注意事項：它會把整個檔案讀進記憶體，設定檔、小型 JSON 檔沒問題，但如果是好幾 GB 的日誌檔，記憶體就爆了。這時候要用下一頁的逐行讀取。
 -->
 
+---
+zoom: 0.88
 ---
 
 # 一次讀取檔案中的一行字串：bufio.Scanner
@@ -686,6 +706,8 @@ sc.Scan() 每次讀一行，讀到就回傳 true，讀到檔案結尾或發生�
 逐行讀取每次只把一行放在記憶體裡，所以不管檔案多大都沒問題。
 -->
 
+---
+zoom: 0.93
 ---
 
 # 刪除檔案
@@ -767,7 +789,19 @@ func main() {
 	file := flag.String("file", "notes.txt", "記事檔案")
 	list := flag.Bool("list", false, "列出所有記事")
 	flag.Parse()
+```
 
+<!--
+先定義兩個旗標並解析：-file 指定檔案，預設是 notes.txt；-list 是布林旗標，有寫就代表要列出記事。
+-->
+
+---
+
+# 練習 1：解題提示（續）
+### 提示說明
+
+```go
+	// 續上頁
 	old, err := os.ReadFile(*file)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		fmt.Println("讀取失敗：", err)
@@ -788,14 +822,14 @@ func main() {
 ```
 
 <!--
-先定義兩個旗標並解析。接著讀出舊的內容，如果錯誤是「檔案不存在」就當作空的，其他錯誤才結束程式。
+接著讀出舊的內容，如果錯誤是「檔案不存在」就當作空的，其他錯誤才結束程式。
 
 -list 模式下，把內容切成一行一行加上編號印出。檔案不存在時 old 是空的，印出「目前沒有記事」。
 -->
 
 ---
 
-# 練習 1：解題提示（續）
+# 練習 1：解題提示（續 2）
 ### 提示說明
 
 ```go
@@ -836,6 +870,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.84
+---
 
 # os.OpenFile()：用旗標控制開啟方式
 
@@ -865,6 +901,8 @@ os.Open 和 os.Create 其實都是 os.OpenFile 的簡化版。os.OpenFile 可以
 O_EXCL 很適合用在「不能覆蓋既有檔案」的情況，例如建立鎖定檔。
 -->
 
+---
+zoom: 0.86
 ---
 
 # os.OpenFile() — 附加寫入範例
@@ -1020,18 +1058,13 @@ func main() {
 }
 ```
 
-```text
-3 [name category price]
-3 [咖啡豆 飲品 450]
-3 [蛋糕, 巧克力 甜點 120]
-```
 
 <!--
 csv.NewReader 接收一個 io.Reader，實務上傳入 os.Open 開啟的檔案，這裡為了方便示範，用 strings.NewReader 把字串包裝成 Reader。
 
 r.Read() 每次讀一筆紀錄，回傳一個字串切片，每個元素是一個欄位。讀到結尾時回傳 io.EOF。這個「用迴圈讀到 EOF」的模式，跟第 11 章 JSON Decoder 讀多筆資料一模一樣。
 
-注意第三筆資料：「蛋糕, 巧克力」被雙引號包著，csv 套件正確地把它當成一個欄位。
+注意第三筆資料：「蛋糕, 巧克力」被雙引號包著，csv 套件正確地把它當成一個欄位。執行後三筆紀錄都印出 3 個欄位。
 -->
 
 ---
@@ -1065,6 +1098,22 @@ func main() {
 	header := rows[0]
 	nameIdx := slices.Index(header, "name")
 	priceIdx := slices.Index(header, "price")
+```
+
+<!--
+CSV 讀出來的每個欄位都是字串，數字要用第 3 章學的 strconv 轉換。
+
+ReadAll 一次把所有紀錄讀成一個二維的字串切片，適合檔案不大的情況。
+
+實務上的一個好習慣：不要把欄位的位置寫死成 row[2]，而是從標題列用 slices.Index 找出「price 在第幾欄」。這樣就算有人在 Excel 裡調整了欄位順序，程式也不會出錯。
+-->
+
+---
+
+# 讀取每行資料各欄位的值（續）
+
+```go
+	// 續上頁
 	total := 0
 	for i, row := range rows[1:] {
 		price, err := strconv.Atoi(row[priceIdx])
@@ -1079,15 +1128,13 @@ func main() {
 ```
 
 <!--
-CSV 讀出來的每個欄位都是字串，數字要用第 3 章學的 strconv 轉換。
-
-ReadAll 一次把所有紀錄讀成一個二維的字串切片，適合檔案不大的情況。
-
-實務上的一個好習慣：不要把欄位的位置寫死成 row[2]，而是從標題列用 slices.Index 找出「price 在第幾欄」。這樣就算有人在 Excel 裡調整了欄位順序，程式也不會出錯。
+走訪標題列之後的每一筆資料，把價格轉成整數加總。
 
 價格轉換失敗的資料，印出第幾筆、哪個商品有問題，然後跳過，繼續處理其他資料。i+2 是因為要跳過標題列，而且行號從 1 開始算。
 -->
 
+---
+zoom: 0.85
 ---
 
 # 寫入 CSV：csv.Writer
@@ -1186,6 +1233,19 @@ func summarize(path string) (map[string]int, error) {
 	if err != nil || len(rows) == 0 {
 		return nil, fmt.Errorf("讀取 CSV 失敗：%w", err)
 	}
+```
+
+<!--
+summarize 負責讀取 CSV 並統計：開檔案、defer 關閉、ReadAll 讀出所有資料。資料是空的或讀取失敗，就回傳錯誤。
+-->
+
+---
+
+# 綜合練習：解題提示（續）
+### 提示說明
+
+```go
+	// 續上頁
 	catIdx := slices.Index(rows[0], "category")
 	amtIdx := slices.Index(rows[0], "amount")
 	sum := map[string]int{}
@@ -1202,14 +1262,16 @@ func summarize(path string) (map[string]int, error) {
 ```
 
 <!--
-summarize 負責讀取 CSV 並統計：開檔案、defer 關閉、ReadAll 讀出所有資料，用標題列找出欄位位置，走訪每一筆資料累加到 map 裡。
+用標題列找出欄位位置，走訪每一筆資料累加到 map 裡，金額錯誤的資料印出警告並略過。
 
 注意 map 的 += 寫法：鍵不存在時讀到零值 0，加上金額後寫回去，這是第 4 章學的計數技巧。
 -->
 
 ---
+zoom: 0.88
+---
 
-# 綜合練習：解題提示（續）
+# 綜合練習：解題提示（續 2）
 ### 提示說明
 
 ```go

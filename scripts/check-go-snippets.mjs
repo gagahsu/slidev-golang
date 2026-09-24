@@ -37,6 +37,10 @@ const origin = new Map()
 let count = 0
 let skipped = 0
 
+// REWRITE="https://httpbin.org=http://127.0.0.1:8081"：驗證時把網址換成本機的測試伺服器
+const rewrites = (process.env.REWRITE ?? '').split(',').filter(Boolean).map(r => r.split('='))
+const rewrite = code => rewrites.reduce((c, [from, to]) => c.replaceAll(from, to), code)
+
 const blocks = [] // { files: [{ name, code }], where }
 const withDeps = process.env.WITH_DEPS === '1'
 const skipRe = withDeps
@@ -80,7 +84,7 @@ for (const file of files) {
 for (const b of blocks) {
   const dir = `s${String(++count).padStart(4, '0')}`
   mkdirSync(join(work, dir))
-  for (const f of b.files) writeFileSync(join(work, dir, f.name), f.code + '\n')
+  for (const f of b.files) writeFileSync(join(work, dir, f.name), rewrite(f.code) + '\n')
   origin.set(dir, b.where)
 }
 

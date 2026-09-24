@@ -348,7 +348,7 @@ class: flex flex-col justify-center items-center text-center
 
 ---
 
-# 參數不定函式
+# 參數不定函式：...T
 
 在最後一個參數的型別前加 `...`，就能接受**任意數量**的參數，函式內收到的是一個**切片**
 

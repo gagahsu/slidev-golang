@@ -960,7 +960,7 @@ class: flex flex-col justify-center items-center text-center
 
 ---
 
-# 處理 error 與 panic 的指導方針
+# 處理 error 與 panic 的指導方針：何時用哪一個
 
 | 情境 | 做法 |
 | --- | --- |

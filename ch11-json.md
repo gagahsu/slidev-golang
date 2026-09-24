@@ -382,6 +382,8 @@ UpdatedAt 的型別是 time.Time，JSON 套件會自動用 RFC3339 格式解析�
 -->
 
 ---
+zoom: 0.97
+---
 
 # 練習 1：解題提示（續）
 ### 提示說明
@@ -501,7 +503,7 @@ Marshal 什麼時候會回傳錯誤？例如值裡面有通道、函式這種 JS
 -->
 
 ---
-zoom: 0.92
+zoom: 0.89
 ---
 
 # 略過欄位：omitempty 與 omitzero
@@ -776,6 +778,8 @@ DisallowUnknownFields 開啟嚴格模式：遇到 struct 裡沒有的鍵，就�
 -->
 
 ---
+zoom: 0.77
+---
 
 # Decoder 讀取多筆 JSON（JSON Lines）
 
@@ -971,7 +975,7 @@ class: flex flex-col justify-center items-center text-center
 
 ---
 
-# gob：Go 自有的編碼格式
+# gob 與 JSON 的比較
 
 `encoding/gob` 是 Go 專用的**二進位**編碼格式，適合 **Go 程式之間**交換資料
 
@@ -993,6 +997,8 @@ gob 是 Go 自己設計的二進位編碼格式。
 實務上，gob 的使用率遠低於 JSON；跨服務通訊現在更主流的是 Protocol Buffers，這裡知道有 gob 這個選項就好。
 -->
 
+---
+zoom: 0.91
 ---
 
 # gob — 範例
@@ -1105,6 +1111,8 @@ layout: default
 -->
 
 ---
+zoom: 0.94
+---
 
 # 綜合練習：解題提示
 ### 提示說明
@@ -1171,6 +1179,8 @@ Save 方法先檢查 Items 是不是 nil，是的話換成空切片，確保輸�
 Load 用 NewDecoder 讀取，開啟嚴格模式，解碼失敗時用 %w 包裝錯誤，加上「載入待辦清單失敗」的情境。
 -->
 
+---
+zoom: 0.86
 ---
 
 # 綜合練習：解題提示（續 2）
