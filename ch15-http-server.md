@@ -287,7 +287,20 @@ func main() {
 	mux.HandleFunc("/", notFound)                   // 其他所有路徑
 	log.Fatal(http.ListenAndServe(":8080", mux))
 }
+```
 
+<!--
+這個範例註冊了四個路由。
+
+注意 /products 註冊了兩次：GET 對應 listProducts，POST 對應 createProduct。同一個網址，依照方法做不同的事，這就是等一下 RESTful API 的核心概念。最後的 "/" 接住所有沒有被匹配的路徑，回傳 404。
+-->
+
+---
+
+# 多重路徑 — 範例（續）
+
+```go
+// 續上頁
 func home(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "首頁")
 }
@@ -307,9 +320,7 @@ func notFound(w http.ResponseWriter, r *http.Request) {
 ```
 
 <!--
-這個範例註冊了四個路由。
-
-注意 /products 註冊了兩次：GET 對應 listProducts，POST 對應 createProduct。同一個網址，依照方法做不同的事，這就是等一下 RESTful API 的核心概念。
+四個處理器都很簡單，重點在 createProduct 和 notFound。
 
 createProduct 用 w.WriteHeader 設定狀態碼 201 Created。使用 WriteHeader 的注意事項：它一定要在寫入本體「之前」呼叫，因為 HTTP 回應是先送狀態碼和標頭、再送本體，一旦開始寫本體，狀態碼就已經送出去了，改不了。沒有呼叫 WriteHeader 的話，預設是 200。
 
@@ -357,6 +368,22 @@ func main() {
 			}
 			fmt.Fprintf(w, "你好，%s！\n", name)
 		})
+```
+
+<!--
+網址裡的參數有兩種。
+
+查詢參數是問號後面的 key=value，用 r.URL.Query().Get 讀取，這跟上一章組查詢參數用的 url.Values 是同一個型別。參數不存在時回傳空字串，所以要自己處理預設值。
+
+測試方式：瀏覽器輸入 localhost:8080/hello?name=Gopher。
+-->
+
+---
+
+# 查詢參數與路徑參數（續）
+
+```go
+	// 續上頁
 	mux.HandleFunc("GET /products/{id}",
 		func(w http.ResponseWriter, r *http.Request) {
 			id, err := strconv.Atoi(r.PathValue("id"))
@@ -371,15 +398,11 @@ func main() {
 ```
 
 <!--
-網址裡的參數有兩種。
-
-查詢參數是問號後面的 key=value，用 r.URL.Query().Get 讀取，這跟上一章組查詢參數用的 url.Values 是同一個型別。參數不存在時回傳空字串，所以要自己處理預設值。
-
 路徑參數是路徑的一部分，例如 /products/42 裡的 42。在路由樣式裡用大括號定義，再用 r.PathValue 讀取，這是 Go 1.22 加入的功能。
 
 讀到的參數都是字串，要轉成數字就用 strconv.Atoi。使用參數的注意事項：參數是使用者可以任意輸入的，一定要驗證，轉換失敗要回傳 400 Bad Request，不能讓程式 panic。
 
-測試方式：瀏覽器輸入 localhost:8080/hello?name=Gopher，以及 localhost:8080/products/42 和 /products/abc。
+測試方式：localhost:8080/products/42 和 /products/abc。
 -->
 
 ---
@@ -526,7 +549,22 @@ var page = template.Must(template.New("page").Parse(`
 {{range .Items}}<li>{{.Name}}：{{.Price}} 元</li>
 {{else}}<li>目前沒有商品</li>{{end}}
 </ul>`))
+```
 
+<!--
+用 fmt.Fprintf 組 HTML 很痛苦，而且容易出錯。Go 提供了 html/template 模板套件。
+
+模板就像一張「填空的表格」：HTML 裡用兩個大括號標記要填入資料的地方，{{.Title}} 代表「填入資料的 Title 欄位」，點代表目前的資料。{{range}} 走訪切片，每個元素重複一次；{{else}} 在切片是空的時候顯示。
+
+template.Must 是第 6 章學的 Must 慣例：模板是寫死在程式碼裡的，寫錯就是 bug，直接 panic。模板只需要解析一次，所以宣告成套件層級的變數。
+-->
+
+---
+
+# 使用模板產生網頁：html/template（續）
+
+```go
+// 續上頁
 type Item struct {
 	Name  string
 	Price int
@@ -546,13 +584,9 @@ func main() {
 ```
 
 <!--
-用 fmt.Fprintf 組 HTML 很痛苦，而且容易出錯。Go 提供了 html/template 模板套件。
+Execute 把資料填進模板，寫到 w。資料可以是 struct，也可以是 map，這裡用 map 放標題和商品切片。
 
-模板就像一張「填空的表格」：HTML 裡用兩個大括號標記要填入資料的地方，{{.Title}} 代表「填入資料的 Title 欄位」，點代表目前的資料。{{range}} 走訪切片，每個元素重複一次；{{else}} 在切片是空的時候顯示。
-
-template.Must 是第 6 章學的 Must 慣例：模板是寫死在程式碼裡的，寫錯就是 bug，直接 panic。模板只需要解析一次，所以宣告成套件層級的變數。
-
-Execute 把資料填進模板，寫到 w。資料可以是 struct，也可以是 map。
+注意第二個商品的名稱是 <b>蛋糕</b>，下一頁會說明它為什麼不會變成粗體。
 -->
 
 ---
@@ -798,7 +832,20 @@ var (
 </form>
 <ul>{{range .}}<li>{{.}}</li>{{end}}</ul>`))
 )
+```
 
+<!--
+這是一個簡單的留言板。
+
+首頁用模板顯示一個表單和所有留言。表單的 method 是 POST，action 是 /messages，按下送出時，瀏覽器會把表單資料用 POST 送到 /messages。這跟上一章 http.PostForm 送出的格式一模一樣。
+-->
+
+---
+
+# 讀取表單資料：r.FormValue（續）
+
+```go
+// 續上頁
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}",
@@ -818,15 +865,11 @@ func main() {
 ```
 
 <!--
-這是一個簡單的留言板。
-
-首頁用模板顯示一個表單和所有留言。表單的 method 是 POST，action 是 /messages，按下送出時，瀏覽器會把表單資料用 POST 送到 /messages。這跟上一章 http.PostForm 送出的格式一模一樣。
-
 伺服器用 r.FormValue 讀取表單欄位，參數是欄位的 name。它會自動解析表單，欄位不存在時回傳空字串。
 
 處理完之後，用 http.Redirect 把使用者導回首頁，狀態碼是 303 See Other。這個模式叫做 PRG（Post/Redirect/Get）：如果不導向，使用者按重新整理，瀏覽器會重新送出一次 POST，留言就會重複。
 
-補充：messages 被多個請求同時修改，會有資料競爭的問題，下一章會學怎麼用互斥鎖保護它。
+補充：messages 被多個請求同時修改，會有資料競爭的問題，第 16 章會學怎麼用互斥鎖保護它。
 -->
 
 ---
