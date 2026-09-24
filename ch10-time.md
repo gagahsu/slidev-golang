@@ -770,7 +770,7 @@ slices.SortFunc 的比較函式直接回傳 a.expire.Compare(b.expire)，就會�
 -->
 
 ---
-zoom: 0.97
+zoom: 0.94
 ---
 
 # 綜合練習：解題提示（續）
