@@ -3,7 +3,7 @@
 // 規則：
 //   - 只檢查以 `package` 開頭、可獨立編譯的 ```go 區塊（片段程式碼不檢查）
 //   - 程式碼行尾有 `// 編譯錯誤` 標記者略過（刻意示範錯誤的程式碼；註解掉的行不算）
-//   - import 了第三方模組（github.com／golang.org／gopkg.in）的區塊略過
+//   - import 了第三方模組或範例模組（github.com／golang.org／gopkg.in／example.com）的區塊略過
 //   - import 了 "testing" 的區塊會存成 x_test.go
 //   - 第一行是 `// 續上頁` 的區塊，會接在同檔案上一個區塊後面一起檢查（跨頁的長程式）
 //
@@ -52,7 +52,7 @@ for (const file of files) {
       continue
     }
     if (!/^\s*package \w+/.test(code)) continue
-    if (/^\s*[^\s/].*\/\/\s*編譯錯誤/m.test(code) || /import[\s\S]*?"(github\.com|golang\.org|gopkg\.in)\//.test(code)) {
+    if (/^\s*[^\s/].*\/\/\s*編譯錯誤/m.test(code) || /import[\s\S]*?"(github\.com|golang\.org|gopkg\.in|example\.com)\//.test(code)) {
       skipped++
       last = null
       continue
@@ -91,6 +91,8 @@ for (const f of unformatted) {
 // --run：實際執行每個 main 程式並印出輸出，方便對照投影片上標註的結果
 if (run) {
   for (const [dir, where] of origin) {
+    const src = readFileSync(join(work, dir, readdirSync(join(work, dir))[0]), 'utf8')
+    if (!/^package main\b/m.test(src) || !/func main\(\)/.test(src)) continue
     const r = spawnSync('go', ['run', `./${dir}`], { cwd: work, encoding: 'utf8', timeout: 20000 })
     console.log(`\n── ${where}`)
     console.log((r.stdout + r.stderr).trimEnd())
