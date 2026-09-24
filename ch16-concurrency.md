@@ -118,6 +118,8 @@ Go 的設計是：我們負責把程式寫成「可以並行」的形式，也�
 -->
 
 ---
+zoom: 0.96
+---
 
 # Goroutine
 
@@ -157,6 +159,8 @@ goroutine 非常輕量：一個作業系統的執行緒大約需要 1MB 的記�
 注意最後一行的 Sleep：main 函式結束時，整個程式就結束了，其他 goroutine 不管有沒有做完都會被強制終止。這裡先用 Sleep 等待，但這是很差的做法，下一頁會學正確的方式。
 -->
 
+---
+zoom: 0.97
 ---
 
 # WaitGroup：等待一群 goroutine 完成
@@ -245,6 +249,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.97
+---
 
 # 什麼是資料競爭（data race）？
 
@@ -288,6 +294,8 @@ Go 提供了一個神兵利器：-race 競爭偵測器。go run、go test 都可
 -->
 
 ---
+zoom: 0.8
+---
 
 # 原子操作 (atomic operation)
 
@@ -330,6 +338,8 @@ Go 1.19 加入了型別化的原子值，例如 atomic.Int64，用法比舊的 a
 原子操作的效能很好，但它只適合非常簡單的情況：一個計數器、一個開關旗標。如果要保護的是多個變數、或是一段複雜的邏輯，就要用下一頁的互斥鎖。
 -->
 
+---
+zoom: 0.77
 ---
 
 # 互斥鎖 (mutex)
@@ -450,7 +460,19 @@ func download(id int) int {
 	time.Sleep(time.Duration(10+rand.IntN(41)) * time.Millisecond)
 	return id * 100
 }
+```
 
+<!--
+download 用 rand.IntN(41) 產生 0 到 40 的亂數，加上 10，就是 10 到 50 毫秒，再轉換成 time.Duration。回傳的檔案大小是 id 乘以 100。
+-->
+
+---
+
+# 練習 1：解題提示（續）
+### 提示說明
+
+```go
+// 續上頁
 func main() {
 	start := time.Now()
 	var (
@@ -476,8 +498,6 @@ func main() {
 ```
 
 <!--
-download 用 rand.IntN(41) 產生 0 到 40 的亂數，加上 10，就是 10 到 50 毫秒。
-
 每個 goroutine 下載完成後，用原子操作累加總量，用互斥鎖保護 map 的寫入。這裡鎖住的範圍只有 map 那一行，下載本身不需要鎖，這就是「鎖住的範圍越小越好」。
 
 總下載量是 100 + 200 + … + 2000 = 21000，總耗時大約 50 毫秒，接近最慢的那一個。
@@ -497,6 +517,8 @@ class: flex flex-col justify-center items-center text-center
 接下來是 Go 最有特色的功能：通道。
 -->
 
+---
+zoom: 0.9
 ---
 
 # 使用通道傳遞訊息
@@ -536,6 +558,8 @@ func main() {
 這就是封面那句話的意思：goroutine 之間不共享變數，而是透過通道把資料「交給」對方。
 -->
 
+---
+zoom: 0.84
 ---
 
 # 通道 — 收集多個 goroutine 的結果
@@ -606,7 +630,20 @@ func main() {
 		time.Sleep(10 * time.Millisecond)
 		payments <- "付款 #7"
 	}()
+```
 
+<!--
+如果要同時等待多個通道，就用 select。
+
+先準備兩個通道：訂單和付款，各自由一個 goroutine 在不同的時間送出資料。付款比較快，10 毫秒就送出；訂單要 20 毫秒。
+-->
+
+---
+
+# 從通道讀取多重來源的資料：select（續）
+
+```go
+	// 續上頁
 	for range 2 {
 		select {
 		case o := <-orders:
@@ -622,9 +659,9 @@ func main() {
 ```
 
 <!--
-如果要同時等待多個通道，就用 select。它的語法跟 switch 很像，每個 case 是一個通道的操作，哪一個通道先準備好，就執行哪一個 case。如果同時有多個準備好，會隨機選一個。
+select 的語法跟 switch 很像，每個 case 是一個通道的操作，哪一個通道先準備好，就執行哪一個 case。如果同時有多個準備好，會隨機選一個。
 
-這個範例同時等待訂單和付款兩個通道。付款比較快（10 毫秒），所以會先印出「收到付款」，再印出「收到訂單」。
+付款比較快，所以會先印出「收到付款」，再印出「收到訂單」。
 
 time.After 會回傳一個通道，在指定的時間之後送出一個值，搭配 select 就能實現「逾時」：如果一秒內兩個通道都沒有資料，就執行逾時的 case。第 12 章的 signal.NotifyContext 範例，就是用 select 同時等待計時器和關閉訊號。
 -->
@@ -641,6 +678,8 @@ class: flex flex-col justify-center items-center text-center
 接下來學幾種使用通道的常見模式。
 -->
 
+---
+zoom: 0.82
 ---
 
 # 通道緩衝區與通道關閉：close()
@@ -745,6 +784,8 @@ worker 做完工作後關閉 done，main 的 <-done 就會收到零值、不再�
 -->
 
 ---
+zoom: 0.75
+---
 
 # 使用通道傳送取消信號
 
@@ -814,7 +855,20 @@ func countdown(n int) <-chan int { // 回傳「只能接收」的通道
 	}()
 	return ch
 }
+```
 
+<!--
+這是一個很常見的模式：產生器。一個函式在內部建立通道、啟動一個 goroutine 往通道送資料，然後把通道回傳給呼叫者。呼叫者只要用 for range 接收就好，完全不用管 goroutine 的細節。
+
+countdown 產生 n 到 1 的數字，送完之後 defer close 關閉通道，這樣呼叫者的 for range 才會結束。
+-->
+
+---
+
+# 產生器與管線（pipeline）
+
+```go
+// 續上頁
 func squares(in <-chan int) <-chan int { // 管線（pipeline）：接上前一段
 	out := make(chan int)
 	go func() {
@@ -835,11 +889,9 @@ func main() {
 ```
 
 <!--
-這是一個很常見的模式：產生器。一個函式在內部建立通道、啟動一個 goroutine 往通道送資料，然後把通道回傳給呼叫者。呼叫者只要用 for range 接收就好，完全不用管 goroutine 的細節。
-
-countdown 產生 n 到 1 的數字，送完之後 defer close 關閉通道，這樣呼叫者的 for range 才會結束。
-
 squares 接收一個通道、回傳另一個通道，把收到的每個數字平方後送出。這樣就能把多個函式像水管一樣接起來，叫做「管線」（pipeline）：countdown 產生數字，流進 squares 平方，再流到 main 印出來。每一段都在自己的 goroutine 裡同時進行。
+
+執行後會印出 16 9 4 1。
 -->
 
 ---
@@ -899,7 +951,20 @@ func (p *Pool) worker(id int) { // 方法也可以用 go 啟動
 		p.results <- fmt.Sprintf("工人%d 處理工作%d", id, j)
 	}
 }
+```
 
+<!--
+結構的方法也可以用 go 關鍵字啟動成 goroutine，go p.worker(id) 就是在新的 goroutine 裡執行 p 的 worker 方法。
+
+Pool 結構包含工作通道、結果通道和 WaitGroup。worker 方法用 for range 從 jobs 通道不斷領取工作，直到 jobs 被關閉；處理完就把結果送到 results。
+-->
+
+---
+
+# 工作池（續）
+
+```go
+// 續上頁
 func main() {
 	p := &Pool{jobs: make(chan int, 10), results: make(chan string, 10)}
 	for id := 1; id <= 3; id++ { // 固定 3 個工人
@@ -919,11 +984,9 @@ func main() {
 ```
 
 <!--
-結構的方法也可以用 go 關鍵字啟動成 goroutine，go p.worker(id) 就是在新的 goroutine 裡執行 p 的 worker 方法。
-
 這是實務上非常常見的「工作池」模式：固定啟動 3 個工人，從同一個 jobs 通道搶工作來做。6 個工作會被 3 個工人分著做完。為什麼要限制工人的數量？例如要呼叫一個 API，同時發出一萬個請求可能會被對方封鎖，用工作池就能控制「最多同時 3 個」。
 
-最巧妙的是結尾：送完所有工作後關閉 jobs，工人的 for range 就會結束；另外開一個 goroutine 等所有工人結束後，再關閉 results，main 的 for range 才會結束。這展示了「由送出的一方關閉通道」的原則：jobs 由 main 關閉，results 在所有工人（送出方）都結束後才關閉。
+最巧妙的是結尾：送完所有工作後關閉 jobs，工人的 for range 就會結束；另外開一個 goroutine 等所有工人結束後，再關閉 results，main 的 for range 才會結束。這展示了「由送出的一方關閉通道」的原則。
 -->
 
 ---
@@ -979,7 +1042,21 @@ func gen(urls ...string) <-chan string {
 	}()
 	return ch
 }
+```
 
+<!--
+先看資料結構和產生器。
+
+result 結構包含網址、耗時和錯誤。gen 是產生器，跟剛剛的 countdown 一樣的寫法：建立通道、在 goroutine 裡逐一送出網址、送完關閉。
+-->
+
+---
+
+# 練習 2：解題提示（續）
+### 提示說明
+
+```go
+// 續上頁
 func check(url string) (time.Duration, error) {
 	if strings.Contains(url, "bad") {
 		return 0, errors.New("連線失敗")
@@ -991,14 +1068,12 @@ func check(url string) (time.Duration, error) {
 ```
 
 <!--
-先看資料和兩個輔助函式。
-
-result 結構包含網址、耗時和錯誤。gen 是產生器，跟剛剛的 countdown 一樣的寫法。check 模擬檢查網址：包含 bad 就回傳錯誤，否則睡一段時間。
+check 模擬檢查網址：包含 bad 就回傳錯誤，否則依網址長度睡一段時間，再回傳耗時。
 -->
 
 ---
 
-# 練習 2：解題提示（續）
+# 練習 2：解題提示（續 2）
 ### 提示說明
 
 ```go
@@ -1010,7 +1085,21 @@ func worker(in <-chan string, out chan<- result, wg *sync.WaitGroup) {
 		out <- result{u, d, err}
 	}
 }
+```
 
+<!--
+worker 的參數用了單向通道：in 只能接收，out 只能送出。WaitGroup 要傳指標，因為剛剛說過同步物件不能被複製，WaitGroup 也一樣。
+
+每個工人從 in 不斷領取網址、檢查，再把結果送到 out，直到 in 被關閉。
+-->
+
+---
+
+# 練習 2：解題提示（續 3）
+### 提示說明
+
+```go
+// 續上頁
 func main() {
 	urls := gen("go.dev", "bad.example", "pkg.go.dev", "github.com")
 	results := make(chan result)
@@ -1036,9 +1125,7 @@ func main() {
 ```
 
 <!--
-worker 的參數用了單向通道：in 只能接收，out 只能送出。WaitGroup 要傳指標，因為剛剛說過同步物件不能被複製，WaitGroup 也一樣。
-
-main 啟動 3 個工人，都從同一個 urls 通道接收。另外開一個 goroutine 等工人都結束後關閉 results，main 就能用 for range 接收所有結果。
+main 啟動 3 個工人，都從同一個 urls 通道接收。另外開一個 goroutine 等工人都結束後關閉 results，main 就能用 for range 接收所有結果，最後統計成功與失敗的數量。
 
 注意這裡用的是傳統的 Add、go、Done，因為 worker 是一個獨立的函式，需要自己呼叫 Done。
 -->
@@ -1055,6 +1142,8 @@ class: flex flex-col justify-center items-center text-center
 最後學 context 套件，前面好幾章已經用過它了，今天來看它的完整面貌。
 -->
 
+---
+zoom: 0.91
 ---
 
 # 什麼是 context？
@@ -1084,6 +1173,8 @@ context 的原理其實就是剛剛學的「關閉通道廣播」：ctx.Done() �
 建立 context 的函式都是 With 開頭，從一個父 context 衍生出子 context：WithCancel 可以手動取消，WithTimeout 和 WithDeadline 會在時間到的時候自動取消。父 context 被取消時，所有的子 context 也會一起被取消。
 -->
 
+---
+zoom: 0.81
 ---
 
 # 使用 context 控制逾時
@@ -1188,6 +1279,8 @@ layout: default
 想想看：C 最便宜，但它要 300 毫秒才會回應，超過了 150 毫秒的上限，最後會選到哪一家？
 -->
 
+---
+zoom: 0.91
 ---
 
 # 綜合練習：解題提示
