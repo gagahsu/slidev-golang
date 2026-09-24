@@ -61,6 +61,7 @@ layout: default
 - **非對稱式加密** — RSA-OAEP
 - **數位簽章** — Ed25519
 - **HTTPS / TLS 與 X.509 憑證** — 自簽署憑證、ECDSA
+- **GoShop 專案實作** — 第 18 步：後台登入與 HTTPS
 - **章節總結**
 
 <!--
@@ -1311,6 +1312,193 @@ main 從環境變數讀取金鑰，用 hex.DecodeString 轉成位元組，長度
 -->
 
 ---
+layout: section
+class: flex flex-col justify-center items-center text-center
+---
+
+# GoShop 專案實作
+## 第 18 步：後台登入與 HTTPS
+
+<!--
+回到 GoShop。現在的後台有一個很嚴重的問題：任何人只要知道網址 /admin，就能看到所有訂單、隨意修改商品價格。
+
+而且資料是用 HTTP 明文傳送的，同一個咖啡廳 Wi-Fi 的人都看得到。今天學的雜湊、HMAC 和 TLS，剛好可以解決這兩個問題。
+-->
+
+---
+
+# GoShop 第 18 步：後台登入與 HTTPS
+### 任務說明
+
+1. `internal/auth`：
+   - `HashPassword`／`CheckPassword`：用 **bcrypt** 產生與比對密碼雜湊
+   - `NewToken`／`Verify`：「到期時間.簽章」格式的憑證，用 **HMAC-SHA256** 簽章
+2. `web`：`GET/POST /login`、`POST /logout`；`requireAdmin` 中介軟體保護 `/admin`
+3. 登入成功後設定 cookie：`HttpOnly`、`Secure`（HTTPS 時）、`SameSite=Lax`
+4. `-hash-password`：從標準輸入讀取密碼，印出 bcrypt 雜湊，設定到 `GOSHOP_ADMIN_HASH`
+5. `-tls-cert`、`-tls-key`：改用 HTTPS，**最低 TLS 1.3**
+
+```bash
+export GOSHOP_ADMIN_HASH=$(echo 'goshop-admin' | go run . -hash-password)
+go run $(go env GOROOT)/src/crypto/tls/generate_cert.go \
+    -host localhost,127.0.0.1 -ecdsa-curve P256
+go run . -http :8443 -tls-cert cert.pem -tls-key key.pem
+```
+
+<!--
+這一步要替後台加上登入機制，並且改用 HTTPS。
+
+密碼的部分，就是本章「使用雜湊的注意事項」講的：絕對不能存明文，也不能用 SHA-256，要用 bcrypt 這種刻意設計得很慢的函式。
+
+登入之後，我們要發給瀏覽器一個「通行證」，之後的每個請求都帶著它。這個通行證用 HMAC 簽章，只有知道金鑰的伺服器能產生，別人改了一個字，簽章就對不上了。
+
+憑證的部分，用 Go 內建的 generate_cert.go 產生 ECDSA 的自簽憑證，在本機測試 HTTPS。
+-->
+
+---
+
+# GoShop 第 18 步：解題提示
+### bcrypt 與 HMAC 簽章憑證
+
+```go
+// goshop/internal/auth/auth.go
+// CheckPassword 比對密碼是否正確。
+func (a *Auth) CheckPassword(password string) bool {
+	return bcrypt.CompareHashAndPassword(a.PasswordHash, []byte(password)) == nil
+}
+
+// NewToken 產生「到期時間.簽章」格式的憑證，例如 1790000000.q7Xk…
+func (a *Auth) NewToken(now time.Time) string {
+	exp := strconv.FormatInt(now.Add(a.TTL).Unix(), 10)
+	return exp + "." + a.sign(exp)
+}
+// ...
+func (a *Auth) sign(msg string) string {
+	mac := hmac.New(sha256.New, a.Secret)
+	mac.Write([]byte(msg))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+```
+
+<!--
+CheckPassword 用 bcrypt 的 CompareHashAndPassword 比對，傳回 nil 就代表密碼正確。bcrypt 的雜湊裡已經包含了鹽和成本參數，所以比對時不需要另外存鹽。
+
+NewToken 產生登入憑證，格式是「到期時間點簽章」。到期時間是 Unix 秒數，簽章是用 HMAC-SHA256 對到期時間簽出來的，再用 URL 安全的 Base64 編碼，這樣放進 cookie 不會有特殊字元的問題。
+
+有人想把到期時間改成 9999999999 讓自己永遠登入？沒用，因為他算不出新的簽章，他沒有金鑰。
+-->
+
+---
+
+# GoShop 第 18 步：解題提示（續）
+### 驗證憑證：hmac.Equal
+
+```go
+// goshop/internal/auth/auth.go
+// Verify 檢查簽章是否正確、是否還沒過期。
+func (a *Auth) Verify(token string, now time.Time) error {
+	exp, sig, ok := strings.Cut(token, ".")
+	// hmac.Equal 花費的時間固定，避免被用「計時攻擊」猜出簽章
+	if !ok || !hmac.Equal([]byte(sig), []byte(a.sign(exp))) {
+		return ErrInvalidToken
+	}
+	unix, err := strconv.ParseInt(exp, 10, 64)
+	if err != nil || now.Unix() >= unix {
+		return ErrInvalidToken
+	}
+	return nil
+}
+```
+
+| 測試案例 | 結果 |
+| --- | --- |
+| 59 分鐘後 | ✅ 有效 |
+| 剛好 1 小時後 | ❌ 過期 |
+| 竄改到期時間 | ❌ 簽章不符 |
+| 用別的金鑰簽的 | ❌ 簽章不符 |
+
+<!--
+Verify 先用 strings.Cut 把憑證切成到期時間和簽章兩段，再用同一把金鑰重新簽一次到期時間，比對兩個簽章是否相同。
+
+比對一定要用 hmac.Equal，不能用 ==。== 比對字串時，遇到第一個不同的字元就會停下來，攻擊者可以量測回應時間，一個字元一個字元猜出正確的簽章。hmac.Equal 不管哪裡不同，花的時間都一樣。
+
+簽章正確之後，才檢查有沒有過期。下面的表格是 auth_test.go 裡的測試案例，每一種竄改都會被擋下來。
+-->
+
+---
+
+# GoShop 第 18 步：解題提示（續 2）
+### 登入中介軟體與安全的 cookie
+
+```go
+// goshop/internal/web/login.go
+// requireAdmin 是中介軟體：沒有有效的登入憑證就導向登入頁。
+func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		c, err := r.Cookie(cookieName)
+		if err != nil || s.Auth.Verify(c.Value, time.Now()) != nil {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		next(w, r)
+	}
+}
+```
+
+```go
+// goshop/internal/web/login.go
+		HttpOnly: true,         // JavaScript 讀不到，降低 XSS 竊取的風險
+		Secure:   r.TLS != nil, // 使用 HTTPS 時，只在加密連線中傳送
+		SameSite: http.SameSiteLaxMode,
+```
+
+<!--
+requireAdmin 是一個中介軟體，它接收一個處理器，傳回一個加上登入檢查的新處理器。沒有 cookie，或是 cookie 裡的憑證無效，就導向登入頁；通過檢查才交給原本的處理器。
+
+在路由的地方，把後台的兩個處理器包起來：s.requireAdmin(s.adminPage)。API 是給顧客用的，不需要登入，所以不包。
+
+cookie 的三個安全設定：HttpOnly 讓網頁上的 JavaScript 讀不到它；Secure 讓它只在 HTTPS 連線中傳送，r.TLS 不是 nil 就代表這是 HTTPS 請求；SameSite=Lax 讓別的網站發起的 POST 請求不會帶上這個 cookie，可以防範 CSRF 攻擊。
+-->
+
+---
+
+# GoShop 第 18 步：解題提示（續 3）
+### HTTPS：TLS 1.3
+
+```go
+// goshop/main.go
+	srv := &http.Server{
+		Addr:              opt.addr,
+		Handler:           app.Handler(),
+		ReadHeaderTimeout: 5 * time.Second,
+		TLSConfig:         &tls.Config{MinVersion: tls.VersionTLS13},
+	}
+	errCh := make(chan error, 1)
+	go func() {
+		if opt.tlsCert != "" {
+			errCh <- srv.ListenAndServeTLS(opt.tlsCert, opt.tlsKey)
+		} else {
+			errCh <- srv.ListenAndServe()
+		}
+	}()
+```
+
+```text
+$ curl --cacert cert.pem https://localhost:8443/admin        → 303 導向 /login
+$ curl --cacert cert.pem -d password=goshop-admin https://localhost:8443/login
+Set-Cookie: goshop_admin=1790263391.u…; HttpOnly; Secure; SameSite=Lax
+$ curl --tls-max 1.2 --cacert cert.pem https://localhost:8443/  → 連線失敗
+```
+
+<!--
+改用 HTTPS 只需要兩個改變：TLSConfig 設定最低版本是 TLS 1.3，以及把 ListenAndServe 換成 ListenAndServeTLS，傳入憑證和私鑰檔。
+
+用 curl 測試：沒登入打開 /admin 會被導向登入頁；用正確的密碼登入，拿到一個有 HttpOnly 和 Secure 的 cookie；最後故意只允許 TLS 1.2 連線，伺服器直接拒絕。
+
+簽章用的金鑰從環境變數 GOSHOP_SECRET 讀取。沒有設定的時候，程式用 Go 1.24 的 crypto/rand.Text 產生隨機金鑰，缺點是伺服器重新啟動後，所有人都要重新登入。正式環境請一定要設定 GOSHOP_SECRET。
+-->
+
+---
 
 # 章節總結
 
@@ -1321,6 +1509,7 @@ main 從環境變數讀取金鑰，用 hex.DecodeString 轉成位元組，長度
 - **非對稱式加密**：**RSA-OAEP**，金鑰 ≥ 2048 bits；只用來加密小資料（例如 AES 金鑰）
 - **數位簽章**：**Ed25519**，私鑰簽、公鑰驗；證明來源與完整性
 - **TLS**：憑證 = 公鑰 + CA 簽章；ECDSA P-256 更短更快；`ListenAndServeTLS`；信任自簽憑證用 `RootCAs`，**不要 `InsecureSkipVerify`**
+- **GoShop**：bcrypt 存管理員密碼、HMAC 簽署登入憑證、安全的 cookie 設定；ECDSA 自簽憑證 + TLS 1.3
 
 下一章是最後一章：Go 語言的特殊套件 **reflect 與 unsafe**。
 
@@ -1328,6 +1517,8 @@ main 從環境變數讀取金鑰，用 hex.DecodeString 轉成位元組，長度
 我們來整理今天學到的東西。
 
 密碼學的第一原則是不要自己發明，第二原則是隨機值用 crypto/rand。雜湊用來檢查完整性，HMAC 加上金鑰，密碼要用專門的密碼雜湊函式。對稱式加密用 AES-GCM，非對稱式加密用 RSA-OAEP，數位簽章用 Ed25519。HTTPS 把這些工具組合在一起：憑證證明身分、非對稱式加密交換金鑰、對稱式加密傳輸資料。
+
+GoShop 這一步補上了安全性：管理員密碼只存 bcrypt 雜湊；登入後發一個用 HMAC 簽章的憑證，放在 HttpOnly、Secure 的 cookie 裡，比對簽章用 hmac.Equal；伺服器加上 TLS 1.3，用 ECDSA 的自簽憑證在本機測試 HTTPS。
 
 下一章是這門課的最後一章，我們要看 Go 的兩個特殊套件：reflect 和 unsafe。第 11 章的 JSON 套件是怎麼讀到 struct 標籤的？答案就是 reflect。unsafe 則是讓我們繞過 Go 型別系統的「後門」，了解它才知道為什麼 Go 平常這麼安全。
 -->

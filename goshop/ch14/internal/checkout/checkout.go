@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"goshop/internal/payment"
@@ -57,7 +58,8 @@ func (s *Service) Checkout(ctx context.Context, cart Cart) (shop.Order, error) {
 			return shop.Order{}, fmt.Errorf("%s：%w", code, shop.ErrCoupon)
 		}
 		o.Coupon = code
-		rules = append(rules[:len(rules):len(rules)], PercentOff(c.PercentOff))
+		// 先複製再 append，才不會改到 s.Rules 共用的底層陣列（Ch 4）
+		rules = append(slices.Clone(s.Rules), PercentOff(c.PercentOff))
 	}
 	o.Discount = Best(o.Subtotal, rules...)
 	o.Total = o.Subtotal - o.Discount

@@ -63,6 +63,7 @@ layout: default
 - **panic** — 什麼是 panic、`panic()` 函式
 - **recover** — 在 `defer` 中復原
 - **指導方針** — 什麼時候回傳 error、什麼時候 panic
+- **GoShop 專案實作** — 第 6 步：結帳時的錯誤處理
 - **章節總結**
 
 <!--
@@ -1086,6 +1087,153 @@ parseAll 用一個 []error 切片收集錯誤，遇到錯誤就 append 然後 co
 -->
 
 ---
+layout: section
+class: flex flex-col justify-center items-center text-center
+---
+
+# GoShop 專案實作
+## 第 6 步：結帳與錯誤處理
+
+<!--
+回到 GoShop。到目前為止我們都假設一切順利：商品一定存在、庫存一定夠。
+
+但真實的結帳流程充滿了意外：顧客的購物車是空的、想買的商品已經下架、想買 9 個但只剩 5 個。今天學的 error，就是用來描述這些「預期中可能發生」的問題。
+-->
+
+---
+
+# GoShop 第 6 步：結帳與錯誤處理
+### 任務說明
+
+1. 宣告哨兵錯誤 `ErrEmptyCart`（購物車是空的）、`ErrUnknownSKU`（找不到商品）
+2. 自訂錯誤型別 `StockError`，記下 `SKU`、想買幾件 `Want`、只剩幾件 `Have`
+3. `Checkout(catalog, cart, rules...) (Order, error)`：
+   - **先檢查所有品項**，用 `errors.Join` 一次回報所有問題
+   - 全部通過才扣庫存，建立訂單（`Order`，明細要記下成交當下的單價）
+4. 呼叫端用 `errors.Is`、`errors.AsType` 判斷錯誤種類，給顧客對應的建議
+
+```text
+結帳失敗：購物車是空的
+結帳失敗：SKU-003 庫存不足：想買 9 件，只剩 5 件
+SKU-999: 找不到商品
+→ 建議把 SKU-003 改成 5 件
+→ 請移除已下架的商品
+===== 訂單 #1 =====
+...
+```
+
+<!--
+這一步要寫出 GoShop 的第一個結帳函式 Checkout。
+
+有一個很重要的設計：要先把所有品項都檢查完，全部通過才扣庫存。如果邊檢查邊扣，檢查到第三項才發現庫存不足，前兩項的庫存已經被扣掉了，資料就亂了。這個「全部成功或全部失敗」的觀念，第 13 章資料庫的交易會再遇到。
+
+第二個設計是用 errors.Join 把所有問題一次回報。顧客的購物車有兩個問題的時候，一次告訴他兩個問題，比改好一個再跳出下一個友善得多。
+-->
+
+---
+
+# GoShop 第 6 步：解題提示
+### 哨兵錯誤與自訂錯誤型別
+
+```go
+// goshop/main.go
+// 哨兵錯誤：呼叫端可以用 errors.Is 判斷
+var (
+	ErrEmptyCart  = errors.New("購物車是空的")
+	ErrUnknownSKU = errors.New("找不到商品")
+)
+
+// StockError 表示某項商品庫存不足
+type StockError struct {
+	SKU  string
+	Want int // 想買幾件
+	Have int // 實際剩幾件
+}
+
+func (e *StockError) Error() string {
+	return fmt.Sprintf("%s 庫存不足：想買 %d 件，只剩 %d 件",
+		e.SKU, e.Want, e.Have)
+}
+```
+
+<!--
+哨兵錯誤是固定的 error 值，適合「只需要知道是哪一種錯誤」的情況，例如購物車是空的。
+
+庫存不足就不一樣了，呼叫端還想知道是哪個商品、只剩幾件，才能給顧客「建議改成 5 件」這種提示。所以我們自訂一個 StockError 結構，把這些資訊帶在錯誤裡，只要實作 Error 方法，它就是一個 error。
+
+注意 Error 方法用的是指標接收器，所以建立錯誤的時候要寫 &StockError，取出的時候也要用 *StockError。
+-->
+
+---
+
+# GoShop 第 6 步：解題提示（續）
+### 一次回報所有問題：errors.Join
+
+```go
+// goshop/main.go
+// validate 檢查購物車的每個品項，把所有問題一次回報
+func validate(catalog map[string]Product, cart Cart) error {
+	if len(cart.Items) == 0 {
+		return ErrEmptyCart
+	}
+	var errs []error
+	for _, it := range cart.Items {
+		p, ok := catalog[it.SKU]
+		switch {
+		case !ok:
+			errs = append(errs, fmt.Errorf("%s: %w", it.SKU, ErrUnknownSKU))
+		case p.Stock < it.Qty:
+			errs = append(errs, &StockError{it.SKU, it.Qty, p.Stock})
+		}
+	}
+	return errors.Join(errs...) // 沒有錯誤時傳回 nil
+}
+```
+
+<!--
+validate 把所有品項檢查一遍，把遇到的錯誤收集在 errs 切片裡。
+
+商品不存在的時候，用 fmt.Errorf 搭配 %w 包裝哨兵錯誤，這樣錯誤訊息裡有 SKU，errors.Is 也還是能判斷出它是 ErrUnknownSKU。
+
+最後用 errors.Join 把所有錯誤合併成一個。它有一個很方便的特性：切片是空的時候會傳回 nil，所以我們不需要自己判斷有沒有錯誤。
+-->
+
+---
+
+# GoShop 第 6 步：解題提示（續 2）
+### 呼叫端：errors.Is 與 errors.AsType
+
+```go
+// goshop/main.go
+	for _, cart := range carts {
+		o, err := Checkout(catalog, cart, rules...)
+		if err != nil {
+			fmt.Println(err)
+			if se, ok := errors.AsType[*StockError](err); ok {
+				fmt.Printf("→ 建議把 %s 改成 %d 件\n", se.SKU, se.Have)
+			}
+			if errors.Is(err, ErrUnknownSKU) {
+				fmt.Println("→ 請移除已下架的商品")
+			}
+			continue
+		}
+		printReceipt(o)
+	}
+```
+
+- `Checkout` 把 `validate` 的錯誤包裝成 `fmt.Errorf("結帳失敗：%w", err)`，包裝鏈中的錯誤都還找得到
+
+<!--
+呼叫端拿到 error 之後，先印出完整的錯誤訊息，再根據錯誤的種類給建議。
+
+errors.AsType 是 Go 1.26 的新寫法，它會沿著包裝鏈找有沒有 *StockError，找到的話直接拿到那個值，就能讀出 SKU 和 Have。errors.Is 則是判斷鏈中有沒有 ErrUnknownSKU。
+
+就算錯誤被 errors.Join 合併、又被 fmt.Errorf 包了一層，這兩個函式還是都找得到。這就是 Go 錯誤包裝鏈的威力。
+
+執行結果：空購物車和問題購物車都會被擋下來，第三台購物車結帳成功，手沖壺的庫存從 5 變成 4。
+-->
+
+---
 
 # 章節總結
 
@@ -1096,6 +1244,7 @@ parseAll 用一個 []error 切片收集錯誤，遇到錯誤就 append 然後 co
 - **panic**：程式的 bug、無法繼續的狀況；`Must` 函式慣例
 - **recover**：只在 `defer` 中有效，只攔截同一個 goroutine；用在伺服器與 goroutine 的邊界
 - **方針**：可預期的失敗回傳 error；不要忽略 error；錯誤只處理一次
+- **GoShop**：哨兵錯誤、自訂 `StockError`、`errors.Join` 一次回報購物車的所有問題
 
 下一章我們會正式介紹「介面」：Go 最強大的抽象工具。
 
@@ -1103,6 +1252,8 @@ parseAll 用一個 []error 切片收集錯誤，遇到錯誤就 append 然後 co
 我們來整理今天學到的東西。
 
 Go 的錯誤處理核心就是一句話：錯誤是值。函式回傳 error，呼叫端明確處理。建立錯誤用 errors.New 和 fmt.Errorf，用 %w 包裝錯誤加上情境，用 errors.Is 和 errors.As 檢查錯誤種類。panic 留給真正的 bug，recover 用在程式的邊界。
+
+GoShop 的結帳流程也學會了處理錯誤：購物車是空的、商品不存在、庫存不足，每一種都是一個 error 值；用 errors.Join 一次回報所有問題，呼叫端再用 errors.Is 和 errors.AsType 決定怎麼提示顧客。
 
 今天我們看到 error 是一個「介面」：任何有 Error 方法的型別都是 error。這個「只要有某個方法，就符合某個介面」的概念，就是下一章的主題。介面是 Go 最強大、也最有特色的功能，它讓 Go 不需要繼承，也能寫出非常有彈性的程式。
 -->

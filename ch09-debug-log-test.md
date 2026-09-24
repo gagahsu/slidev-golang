@@ -59,6 +59,7 @@ layout: default
 - **以 fmt 套件做格式化輸出** — 格式化動詞、寬度與精度、浮點數格式、`strconv.FormatFloat`
 - **使用 log 提供追蹤訊息／日誌** — `log` 套件、自訂 logger、結構化日誌 `log/slog`
 - **撰寫單元測試** — `testing` 套件、表格驅動測試、覆蓋率、效能測試
+- **GoShop 專案實作** — 第 9 步：替 GoShop 寫測試、加上日誌
 - **章節總結**
 
 <!--
@@ -1026,6 +1027,199 @@ errors.Is(err, nil) 在 err 也是 nil 的時候會回傳 true，所以正常的
 -->
 
 ---
+layout: section
+class: flex flex-col justify-center items-center text-center
+---
+
+# GoShop 專案實作
+## 第 9 步：測試與日誌
+
+<!--
+回到 GoShop。上一章我們做了一次大重構，把程式拆成五個套件。
+
+問題來了：我們怎麼知道重構之後，結帳金額還是算對的？每次都手動執行、用眼睛看輸出，總有一天會漏看。今天學的單元測試，就是讓電腦幫我們檢查。
+-->
+
+---
+
+# GoShop 第 9 步：測試與日誌
+### 任務說明
+
+1. `internal/money/money_test.go`：用**表格驅動測試**檢查 `Money.String()`，**要包含負數**
+2. `internal/checkout/checkout_test.go`：
+   - `TestBest`：各種小計下，折扣規則是否挑對
+   - `TestCheckout`：結帳成功時金額、編號、庫存都正確
+   - `TestCheckoutErrors`：空購物車、商品不存在、庫存不足時，**庫存不能被扣**
+3. 替 `Money.String()` 寫一個 benchmark（Go 1.24 的 `b.Loop`）
+4. 在 `checkout` 用 `slog` 記錄「訂單成立」「訂單付款」；`main` 設定 `TextHandler`
+
+```text
+$ go test ./...
+ok      goshop/internal/checkout    0.005s
+--- FAIL: TestString/負數三位 (0.00s)
+    money_test.go:21: Money(-300).String() = "NT$-,300"，want "-NT$300"
+```
+
+<!--
+這一步要替 GoShop 寫測試。最重要的是結帳的測試，特別是「失敗的時候庫存不能被扣」，這種 bug 如果上線才發現，庫存資料就亂掉了。
+
+另外請大家在 Money 的測試裡加上負數的案例，例如退款的時候金額可能是負的。
+
+寫好之後執行 go test，你會發現……紅字了！負 300 元被印成了 NT$-,300。這是一個一直藏在我們程式裡的 bug，從第 5 章就在了，只是我們從來沒有用負數測試過。
+
+這就是寫測試最大的價值：它會逼我們去想平常沒想到的情況。
+-->
+
+---
+
+# GoShop 第 9 步：解題提示
+### 表格驅動測試
+
+```go
+// goshop/internal/money/money_test.go
+func TestString(t *testing.T) {
+	tests := []struct {
+		name string
+		in   Money
+		want string
+	}{
+		{"零元", 0, "NT$0"},
+		{"三位數", 999, "NT$999"},
+		{"四位數", 1000, "NT$1,000"},
+		// ...
+		{"負數三位", -300, "-NT$300"},
+		{"負數四位", -1500, "-NT$1,500"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.in.String(); got != tt.want {
+				t.Errorf("Money(%d).String() = %q，want %q",
+					int(tt.in), got, tt.want)
+			}
+		})
+	}
+}
+```
+
+<!--
+這是標準的表格驅動測試：先準備一張表，每一列是一個案例，有名稱、輸入和期望的結果，再用迴圈一個一個跑。
+
+t.Run 會替每個案例建立子測試，失敗的時候訊息會顯示子測試的名稱，例如 TestString/負數三位，一眼就知道是哪個案例出問題。
+
+錯誤訊息的格式建議寫成「函式呼叫 = 實際結果，want 期望結果」，這是 Go 社群的慣例，看的人不用翻程式碼就知道哪裡不對。
+-->
+
+---
+
+# GoShop 第 9 步：解題提示（續）
+### 修正 bug：先處理負號
+
+```go
+// goshop/internal/money/money.go
+// String 印出含千分位的金額，例如 NT$1,234、-NT$300。
+func (m Money) String() string {
+	sign := ""
+	if m < 0 {
+		sign, m = "-", -m // 先把負號拿掉，最後再補回去
+	}
+	s := strconv.Itoa(int(m))
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return sign + "NT$" + s
+}
+```
+
+| 輸入 | 修正前 | 修正後 |
+| --- | --- | --- |
+| `-300` | `NT$-,300`（負號被當成一位數） | `-NT$300` |
+| `-1500` | `NT$-1,500` | `-NT$1,500` |
+
+<!--
+bug 的原因是：負號也被算進字串長度了。-300 轉成字串是 4 個字元，程式以為它是四位數，就在負號後面插了一個逗號。
+
+修正的方法很簡單：先把負號拿掉，用正數加千分位，最後再把負號補回去。
+
+修好之後再執行一次 go test，全部通過。而且這個測試會一直留在專案裡，以後誰不小心改壞了，測試馬上就會失敗，這叫做「回歸測試」。
+-->
+
+---
+
+# GoShop 第 9 步：解題提示（續 2）
+### 失敗時庫存不能被扣
+
+```go
+// goshop/internal/checkout/checkout_test.go
+	tests := []struct {
+		name  string
+		items []Item
+		want  error
+	}{
+		{"空的購物車", nil, shop.ErrEmptyCart},
+		{"商品不存在", []Item{{"Z", 1}}, shop.ErrNotFound},
+		{"庫存不足", []Item{{"A", 1}, {"B", 2}}, shop.ErrOutOfStock},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := newService()
+			_, err := svc.Checkout(Cart{Items: tt.items})
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("err = %v，want %v", err, tt.want)
+			}
+			// 結帳失敗時，庫存不能被扣掉
+			if p, _ := svc.Store.Product("A"); p.Stock != 10 {
+				t.Errorf("A 的庫存 = %d，want 10", p.Stock)
+			}
+		})
+	}
+```
+
+<!--
+這是結帳失敗的測試，一樣是表格驅動。
+
+每個案例都建立一個全新的 Service，互不影響。newService 是我們寫的小工具函式，建立一個有 A、B 兩項商品的測試環境。
+
+第三個案例最有意思：A 買 1 件沒問題，B 買 2 件庫存不足。我們不只檢查錯誤是 ErrOutOfStock，還檢查 A 的庫存是不是還是 10。如果程式邊檢查邊扣庫存，這個測試就會抓到。
+
+errors.Is 能判斷 ErrOutOfStock，是因為 StockError 有一個 Unwrap 方法傳回 ErrOutOfStock，這是第 8 步拆套件時加上的。
+-->
+
+---
+
+# GoShop 第 9 步：解題提示（續 3）
+### benchmark 與結構化日誌
+
+```go
+// goshop/internal/money/money_test.go
+func BenchmarkString(b *testing.B) {
+	for b.Loop() {
+		_ = Money(1234567).String()
+	}
+}
+```
+
+```go
+// goshop/internal/checkout/checkout.go
+	slog.Info("訂單成立", "id", o.ID, "total", o.Total)
+```
+
+```text
+$ go test -bench . ./internal/money
+BenchmarkString-4    7921296    144.0 ns/op
+$ go run .
+time=2026-09-24T07:10:57Z level=INFO msg=訂單成立 id=1 total=NT$1,880
+time=2026-09-24T07:10:57Z level=INFO msg=訂單付款 id=1 method=貨到付款
+```
+
+<!--
+benchmark 用 Go 1.24 的 b.Loop 寫法，迴圈會自動跑足夠多次，算出每次呼叫平均花多少時間。每次大約 144 奈秒，對一個字串處理函式來說已經很快了。
+
+日誌的部分，我們在 checkout 裡用 slog.Info 記錄每一張成立的訂單。slog 是結構化日誌，每個欄位都是鍵值對，total 印出來是 NT$1,880，因為 slog 會呼叫 Money 的 String 方法。
+
+main 一開始用 slog.SetDefault 設定 TextHandler 輸出到 stderr，這樣日誌和程式的正常輸出就分開了。
+-->
+
+---
 
 # 章節總結
 
@@ -1035,6 +1229,7 @@ errors.Is(err, nil) 在 err 也是 nil 的時候會回傳 true，所以正常的
 - **log**：自動加時間；`log.Fatal` 會直接結束程式、**不執行 defer**；`log.New` 建立自訂 logger
 - **slog**：結構化日誌（Go 1.21+）；`Debug`／`Info`／`Warn`／`Error` 四個等級；`With` 附加固定欄位
 - **單元測試**：`xxx_test.go`、`func TestXxx(t *testing.T)`；**表格驅動測試** + `t.Run`；`-cover`、`-bench`
+- **GoShop**：表格驅動測試抓到負數金額的 bug；`b.Loop` 效能測試；`slog` 記錄訂單與付款
 
 下一章我們會介紹「時間處理」：`time` 套件的時間、格式化、時區與時間長度。
 
@@ -1042,6 +1237,8 @@ errors.Is(err, nil) 在 err 也是 nil 的時候會回傳 true，所以正常的
 我們來整理今天學到的東西。
 
 除錯有一套固定的步驟，最後一步一定是寫成測試。fmt 的函式有很好記的命名規則，除錯時用 %+v 和 %#v。浮點數格式化要注意銀行家捨入。日誌的部分，現代的 Go 程式建議用 slog 的結構化日誌。單元測試是 Go 內建的，表格驅動測試是主流寫法。
+
+GoShop 這一步有了第一批單元測試，而且測試真的抓到了一個 bug：負數金額會印成 NT$-,300。修好之後，這個測試會一直守護著它，以後不管誰改了 String 方法，只要又壞掉，go test 馬上就會告訴我們。
 
 從下一章開始，我們會學習 Go 標準函式庫裡最常用的幾個套件。第一個是 time 套件，時間處理幾乎是每個應用程式都會用到的功能，而且 Go 的時間格式化方式非常特別，一定會讓大家印象深刻。
 -->

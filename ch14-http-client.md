@@ -60,6 +60,7 @@ layout: default
 - **傳送 GET 請求** — `http.Get`、讀取回應、解析 JSON、查詢參數
 - **傳送 POST 請求** — 送出 JSON、上傳檔案（multipart）
 - **自訂標頭** — `http.NewRequestWithContext`、`client.Do`
+- **GoShop 專案實作** — 第 14 步：匯率 API 與 webhook 通知
 - **章節總結**
 
 <!--
@@ -1054,6 +1055,202 @@ main 查詢 golang/go，印出名稱和星星數；查詢不存在的 golang/nop
 -->
 
 ---
+layout: section
+class: flex flex-col justify-center items-center text-center
+---
+
+# GoShop 專案實作
+## 第 14 步：串接外部服務
+
+<!--
+回到 GoShop。現在 GoShop 開始有海外的顧客了，他們想知道商品大約是多少美金、多少日圓。另外，倉庫希望訂單一付款就馬上收到通知，才能開始撿貨。
+
+這兩個需求，一個要「向別人拿資料」，一個要「把資料送給別人」，剛好就是今天學的 GET 和 POST。
+-->
+
+---
+
+# GoShop 第 14 步：串接外部服務
+### 任務說明
+
+1. `internal/rates`：向 [ExchangeRate-API](https://open.er-api.com/v6/latest/TWD) 查詢匯率
+   - `Rate(ctx, "TWD", "USD")`：用 `NewRequestWithContext` 加上標頭，逾時 5 秒
+   - 狀態碼不是 200、查不到幣別都要傳回錯誤
+2. `internal/webhook`：`Send(ctx, client, url, Event)` 把事件編碼成 JSON，用 POST 送出
+3. `-list -currency USD`：列出商品時顯示換算的外幣；**查不到匯率不能影響列出商品**
+4. `-webhook URL`（預設讀 `GOSHOP_WEBHOOK`）：訂單付款後送出 `order.paid` 事件
+5. 用 `httptest.NewServer` 寫測試，**測試時不連上真正的網路**
+
+```text
+$ go run . -list -currency USD
+SKU-001  NT$450     庫存  20  衣索比亞咖啡豆（約 14.06 USD）
+SKU-003  NT$1,280   庫存   5  手沖壺（約 40.00 USD）
+```
+
+<!--
+這一步要替 GoShop 寫兩個 HTTP 客戶端。
+
+匯率服務用的是 ExchangeRate-API 的免費版本，網址是 open.er-api.com/v6/latest/TWD，大家可以先用瀏覽器打開看看它回傳的 JSON 長什麼樣子。
+
+第 3 點很重要：外部服務是我們控制不了的，它可能很慢、可能掛掉。查不到匯率的時候，GoShop 還是要能列出商品，只是不顯示外幣而已。
+
+第 5 點也很重要：測試不能依賴真正的網路。網路不穩、服務改版，測試就會莫名其妙地失敗。所以我們用 httptest 在本機啟動一個假的服務。
+-->
+
+---
+zoom: 0.9
+---
+
+# GoShop 第 14 步：解題提示
+### 自訂請求：逾時、標頭、狀態碼
+
+```go
+// goshop/internal/rates/rates.go
+// Rate 查詢 1 單位的 base 可以換成多少 target，例如 TWD → USD。
+func (c *Client) Rate(ctx context.Context, base, target string) (float64, error) {
+	u := c.BaseURL + "/latest/" + url.PathEscape(base)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "GoShop/1.0")
+
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("查詢匯率：%w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("查詢匯率：伺服器回應 %s", resp.Status)
+	}
+```
+
+<!--
+Rate 方法用今天學的 NewRequestWithContext 建立請求，這樣呼叫端傳進來的 context 被取消的時候，請求也會跟著中斷。
+
+加上 Accept 和 User-Agent 標頭，告訴對方我們要 JSON、我們是誰。有禮貌的客戶端會讓對方比較好除錯。
+
+送出請求用 c.HTTP.Do，c.HTTP 是建立 Client 時設定了 5 秒逾時的 http.Client。千萬不要用預設的 http.DefaultClient，它沒有逾時，對方沒回應的話程式會一直等下去。
+
+拿到回應之後，一定要 defer 關閉 Body，而且要檢查狀態碼：http 套件只有在連線失敗時才會傳回 error，404、500 都算「成功收到回應」。
+-->
+
+---
+
+# GoShop 第 14 步：解題提示（續）
+### 只解碼需要的欄位
+
+```go
+// goshop/internal/rates/rates.go
+// latest 對應服務回傳的 JSON，只取出需要的欄位。
+type latest struct {
+	Result string             `json:"result"`
+	Rates  map[string]float64 `json:"rates"`
+}
+```
+
+```go
+// goshop/internal/rates/rates.go
+	var data latest
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return 0, fmt.Errorf("解析匯率：%w", err)
+	}
+	rate, ok := data.Rates[target]
+	if data.Result != "success" || !ok {
+		return 0, fmt.Errorf("查不到 %s → %s 的匯率", base, target)
+	}
+	return rate, nil
+}
+```
+
+<!--
+匯率服務回傳的 JSON 有很多欄位，但我們只需要兩個：result 表示成功與否，rates 是各國貨幣的匯率。
+
+所以 latest 結構只定義這兩個欄位。解碼的時候，JSON 裡多出來的欄位會被忽略。這跟第 11 章讀自己的商品檔不一樣：自己的檔案我們用嚴格模式；別人的 API 隨時可能加新欄位，就不應該用嚴格模式，不然對方一改版，我們就壞了。
+
+rates 的幣別是不固定的，所以用 map[string]float64 來接，再用 comma ok 檢查有沒有我們要的幣別。
+-->
+
+---
+
+# GoShop 第 14 步：解題提示（續 2）
+### POST 送出 JSON：webhook
+
+```go
+// goshop/internal/webhook/webhook.go
+// Send 把事件編碼成 JSON，POST 到 url；回應不是 2xx 就視為失敗。
+func Send(ctx context.Context, client *http.Client, url string, e Event) error {
+	body, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url,
+		bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("送出 %s：%w", e.Type, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("送出 %s：對方回應 %s", e.Type, resp.Status)
+	}
+	return nil
+}
+```
+
+<!--
+webhook 的意思是：事情發生的時候，主動用 HTTP 通知對方。倉庫系統提供一個網址，GoShop 在訂單付款後，把訂單 POST 過去。
+
+Send 先把事件編碼成 JSON，用 bytes.NewReader 包成請求的 Body，並且設定 Content-Type 標頭，告訴對方送過去的是 JSON。
+
+判斷成功的條件是狀態碼在 200 到 299 之間。對方可能回 200 OK、201 Created、204 No Content，這些都代表收到了。
+
+client 由呼叫端傳進來，這樣逾時的設定由呼叫端決定，測試時也可以換成 httptest 提供的 client。
+-->
+
+---
+
+# GoShop 第 14 步：解題提示（續 3）
+### httptest：在本機啟動假的服務
+
+```go
+// goshop/internal/rates/rates_test.go
+func TestRate(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/latest/TWD" {
+				http.Error(w, "not found", http.StatusNotFound)
+				return
+			}
+			fmt.Fprint(w, `{"result":"success","rates":{"USD":0.03125}}`)
+		}))
+	defer srv.Close()
+
+	c := New(srv.URL)
+	got, err := c.Rate(t.Context(), "TWD", "USD")
+	if err != nil || got != 0.03125 {
+		t.Errorf("Rate(TWD, USD) = %v, %v", got, err)
+	}
+	// ...
+```
+
+- `New(baseURL)` 讓網址可以替換：正式環境用真的服務，測試用 `srv.URL`
+
+<!--
+httptest.NewServer 會在本機的一個隨機連接埠啟動一個真正的 HTTP 伺服器，處理請求的邏輯由我們自己寫。這裡的假服務只認得 /latest/TWD 這個路徑，其他路徑一律回 404。
+
+測試的時候把 srv.URL 當成 BaseURL 傳給 New，Rate 就會向假服務發請求。這樣我們可以測試成功的情況，也可以測試 404、查不到幣別這些平常很難重現的錯誤情況。
+
+這個設計的關鍵是：網址不要寫死在程式裡，而是當成參數傳進來。這個技巧叫做「依賴注入」，上一章的 Store 介面、第 10 章的 Now 函式，都是同樣的想法。
+-->
+
+---
 
 # 章節總結
 
@@ -1063,6 +1260,7 @@ main 查詢 golang/go，印出名稱和星星數；查詢不存在的 golang/nop
 - **查詢參數**：用 `url.Values` + `Encode()`，不要自己串接
 - **POST**：`client.Post(url, "application/json", bytes.NewReader(b))`；表單用 `PostForm`；檔案用 `mime/multipart`（記得 `w.Close()`）
 - **自訂請求**：`http.NewRequestWithContext` + `req.Header.Set` + `client.Do`；用 `io.LimitReader` 限制回應大小
+- **GoShop**：`rates` 用 GET 查匯率並換算外幣價格；`webhook` 用 POST 把付款的訂單通知倉庫；用 `httptest` 測試
 
 下一章我們會換到另一端：用 Go 建立 **HTTP 伺服器**，提供網頁與 RESTful API。
 
@@ -1070,6 +1268,8 @@ main 查詢 golang/go，印出名稱和星星數；查詢不存在的 golang/nop
 我們來整理今天學到的東西。
 
 HTTP 客戶端的標準流程是：建立有逾時的 client、送出請求、defer 關閉本體、檢查狀態碼、解析 JSON。記住兩個最常見的陷阱：DefaultClient 沒有逾時，以及 err 是 nil 不代表成功。需要自訂標頭或使用其他方法時，用 NewRequestWithContext 加上 client.Do。
+
+GoShop 這一步開始和外面的世界溝通：用 GET 向匯率服務查詢匯率，把商品價格換算成外幣；訂單付款後，用 POST 把訂單 JSON 送到倉庫系統的 webhook。兩個客戶端都設了逾時、檢查了狀態碼，測試則用 httptest 在本機啟動假的伺服器。
 
 今天我們是「呼叫別人的 API」的那一方。下一章要換到另一端，用 Go 建立 HTTP 伺服器，自己提供網頁和 API 給別人呼叫。Go 的 net/http 伺服器效能非常好，很多公司直接用標準函式庫就能撐起正式環境的服務。
 -->

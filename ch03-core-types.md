@@ -60,6 +60,7 @@ layout: default
 - **數字** — 整數、浮點數、溢位與繞回、大數值、位元組
 - **字串** — 字串常值、常用操作、`rune` 與 UTF-8
 - **nil 值** — 哪些型別的零值是 `nil`
+- **GoShop 專案實作** — 第 3 步：解析供應商的商品資料
 - **章節總結**
 
 <!--
@@ -976,6 +977,152 @@ func main() { stats("Go 1.27 發布了 Hello 世界") }
 -->
 
 ---
+layout: section
+class: flex flex-col justify-center items-center text-center
+---
+
+# GoShop 專案實作
+## 第 3 步：解析商品資料
+
+<!--
+回到 GoShop。到目前為止，商品資料都是我們直接寫在程式裡的變數。
+
+但真實的情況是，商品資料通常來自供應商，而且格式常常不太乾淨：多了空白、大小寫不一致，甚至價格欄位寫成中文。今天學的字串和數字型別，剛好可以用來處理這些資料。
+-->
+
+---
+
+# GoShop 第 3 步：解析商品資料
+### 任務說明
+
+供應商傳來一段文字，每行是「SKU | 品名 | 單價 | 庫存」，格式不太乾淨：
+
+```go
+const data = `
+sku-001 | 衣索比亞咖啡豆 | 450 | 20
+sku-002 | 濾掛咖啡（10入） | 280 | 50
+ sku-003| 手沖壺 | 1280 | 5
+sku-004 | 馬克杯 | 三百五 | 30
+`
+```
+
+1. 逐行切開欄位，去掉多餘空白，SKU 一律轉成**大寫**
+2. 用 `strconv.Atoi` 把單價轉成整數；**轉換失敗的商品要略過**並印出提示
+3. 寫 `width(s string) int` 計算顯示寬度（中文佔 2 格），讓品名欄位對齊
+4. 用 `strings.Builder` 組出商品清單，最後印出商品數、庫存總值與平均值
+
+<!--
+這是供應商傳來的資料。仔細看會發現幾個問題：SKU 是小寫、第三行開頭多了空白、第四行的價格寫成「三百五」。
+
+我們的任務是把這些資料整理乾淨，印出一張對齊的商品清單。
+
+對齊是這題最有趣的地方：中文字在畫面上佔兩個半形字的寬度，但 len 算的是位元組數，一個中文字是 3 個位元組，兩個數字都不對。所以我們要走訪字串裡的每一個 rune，自己算出顯示寬度。
+-->
+
+---
+
+# GoShop 第 3 步：預期結果
+
+```text
+略過價格格式錯誤的商品： SKU-004
+SKU-001  衣索比亞咖啡豆        450 元
+SKU-002  濾掛咖啡（10入）      280 元
+SKU-003  手沖壺               1280 元
+商品數： 3 ／庫存總值： 29400 元
+平均每種商品庫存價值：9800.0 元
+```
+
+| 檢查項目 | 說明 |
+| --- | --- |
+| SKU 都是大寫 | `strings.ToUpper` |
+| `SKU-004` 被略過 | `strconv.Atoi("三百五")` 會傳回錯誤 |
+| 單價欄位對齊 | 品名補空白到 20 格寬：`20 - width(name)` |
+| 平均值有小數 | 先轉成 `float64` 再相除 |
+
+<!--
+這是執行後應該看到的結果。
+
+第一行是略過 SKU-004 的提示，因為「三百五」沒辦法轉成整數。
+
+中間三行的單價都對齊在同一欄，就算品名的中文字數不一樣也沒關係，這就是 width 函式的功勞。
+
+最後的平均值是 29400 除以 3，等於 9800。為了印出小數，要先把兩個整數都轉成 float64 再相除，Go 不會自動幫我們轉型。
+-->
+
+---
+
+# GoShop 第 3 步：解題提示
+### 用 rune 計算顯示寬度
+
+```go
+// goshop/main.go
+// width 計算字串顯示時佔幾格：中文等全形字佔 2 格
+func width(s string) int {
+	w := 0
+	for _, r := range s {
+		if r < 128 {
+			w++
+		} else {
+			w += 2
+		}
+	}
+	return w
+}
+```
+
+| 函式 | `"咖啡"` 的結果 | 意義 |
+| --- | --- | --- |
+| `len(s)` | 6 | 位元組數（UTF-8 每個中文 3 bytes） |
+| `utf8.RuneCountInString(s)` | 2 | 字元數 |
+| `width(s)` | 4 | 在畫面上佔的寬度 |
+
+<!--
+width 函式用 for range 走訪字串。對字串做 range，每次拿到的是一個 rune，也就是一個完整的 Unicode 字元，而不是一個位元組。
+
+判斷規則很簡單：編號小於 128 的是 ASCII 字元，佔 1 格；其他的我們當成全形字，佔 2 格。這是一個簡化的算法，對中文、英文和數字已經很夠用了。
+
+下面這張表整理了三種「長度」的差別，這是今天最容易搞混的地方。
+-->
+
+---
+zoom: 0.9
+---
+
+# GoShop 第 3 步：解題提示（續）
+### 解析每一行資料
+
+```go
+// goshop/main.go
+	lines := strings.Split(strings.TrimSpace(data), "\n")
+	for _, line := range lines {
+		fields := strings.Split(line, "|")
+		sku := strings.ToUpper(strings.TrimSpace(fields[0]))
+		name := strings.TrimSpace(fields[1])
+		price, err := strconv.Atoi(strings.TrimSpace(fields[2]))
+		if err != nil {
+			fmt.Println("略過價格格式錯誤的商品：", sku)
+			continue
+		}
+		stock, _ := strconv.Atoi(strings.TrimSpace(fields[3]))
+
+		count++
+		value += price * stock
+		pad := strings.Repeat(" ", 20-width(name))
+		fmt.Fprintf(&sb, "%s  %s%s%5d 元\n", sku, name, pad, price)
+	}
+```
+
+<!--
+先用 TrimSpace 去掉整段文字前後的空行，再用 Split 以換行切成一行一行。
+
+每一行再用直線符號切成欄位，每個欄位都要 TrimSpace 去掉空白，SKU 再用 ToUpper 轉大寫。
+
+strconv.Atoi 會傳回兩個值：轉換結果和錯誤。錯誤不是 nil 的時候，就印出提示並用 continue 跳過這一行。錯誤處理第 6 章會詳細介紹，現在先記得「有 err 就要檢查」。
+
+最後用 strings.Repeat 產生補齊用的空白，再用 Fprintf 寫進 strings.Builder。全部組好之後，一次印出 sb.String()。
+-->
+
+---
 
 # 章節總結
 
@@ -986,6 +1133,7 @@ func main() { stats("Go 1.27 發布了 Hello 世界") }
 - **字串**：唯讀的 UTF-8 位元組序列；`len` 是位元組數；處理中文用 `for range` 或 `[]rune`
 - **rune**：`int32` 的別名，代表一個 Unicode 字元
 - **nil**：指標、切片、map、通道、函式、介面的零值；nil 切片可 `append`，nil map 不可寫入
+- **GoShop**：用 `strings`、`strconv` 解析商品資料，用 rune 計算中文品名的顯示寬度
 
 下一章我們會介紹「複合型別」：陣列、切片、map、struct 與介面。
 
@@ -993,6 +1141,8 @@ func main() { stats("Go 1.27 發布了 Hello 世界") }
 我們來整理今天學到的東西。
 
 整數沒特別理由就用 int，要小心執行期溢位會默默繞回。浮點數有精度誤差，比較時看差距、存錢用整數。字串是唯讀的 UTF-8 位元組序列，len 回傳位元組數，處理中文要用 rune。nil 是六種參考型別的零值。
+
+GoShop 這一步用上了今天的每一種型別：strings 和 strconv 解析供應商的資料，rune 算出中文品名的寬度把表格對齊，整數算庫存總值，最後轉成 float64 算平均。
 
 今天學的都是「單一的值」。下一章要學「複合型別」，也就是怎麼把很多個值組合在一起：陣列、切片、map 用來裝一堆同型別的資料，struct 用來把不同型別的欄位組成一筆資料。這些是 Go 程式裡最常用的資料結構。
 -->

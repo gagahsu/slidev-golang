@@ -63,6 +63,7 @@ layout: default
 - **查詢資料** — `QueryContext`、`QueryRowContext`、`NULL` 的處理
 - **更新既有資料** — `UPDATE`、`DELETE`、`RowsAffected`
 - **練習：FizzBuzz 統計表**
+- **GoShop 專案實作** — 第 13 步：`Store` 介面與 MySQL 版本
 - **章節總結**
 
 <!--
@@ -1173,6 +1174,246 @@ Go 這邊只需要讀出兩個欄位並印出來。在 main 裡呼叫 s.SaveFizz
 -->
 
 ---
+layout: section
+class: flex flex-col justify-center items-center text-center
+---
+
+# GoShop 專案實作
+## 第 13 步：換上 MySQL
+
+<!--
+回到 GoShop。上一步我們用 gob 快照存檔，對一個人用的小工具來說已經夠了。
+
+但真正的電商會有很多人同時下單、需要用 SQL 查詢報表、需要可靠的交易機制。這時候就該換上資料庫了。
+
+這一步最有意思的地方是：我們不會把記憶體版本丟掉，而是讓兩種版本並存，用介面來切換。
+-->
+
+---
+
+# GoShop 第 13 步：換上 MySQL
+### 任務說明
+
+1. 在 `store` 定義 **`Store` 介面**（7 個方法，都加上 `ctx context.Context`）
+2. `Memory` 改成實作 `Store`；`checkout.Service.Store` 的型別改成 `store.Store`
+3. 新增 `store.MySQL`：`OpenMySQL(ctx, dsn)` 連線並建立三張資料表
+4. `PlaceOrder` 用**交易**：扣庫存、寫入訂單與明細，任何一步失敗就全部復原
+5. **合約測試** `testStore(t, st Store)`：記憶體版和 MySQL 版跑同一組測試
+6. `main` 加上 `-dsn` 旗標（預設讀環境變數 `GOSHOP_DSN`），有設定就用 MySQL
+
+```sql
+CREATE DATABASE goshop_app CHARACTER SET utf8mb4;
+GRANT ALL ON goshop_app.* TO 'gouser'@'localhost';
+```
+
+<!--
+這一步的工作量比較大，我們一項一項來。
+
+第一步是抽出介面。現在 checkout 直接依賴 *store.Memory，要換成 MySQL 就得修改 checkout。如果 checkout 依賴的是一個介面，任何實作了這個介面的型別都能傳進來。
+
+所有方法都加上 context 參數，因為資料庫操作可能很慢，呼叫端要能設定逾時或取消。這是 database/sql 的 QueryContext、ExecContext 需要的。
+
+注意資料庫名稱：本章範例用的是 goshop 資料庫，裡面已經有一張結構不同的 products 表。為了不互相干擾，專案用另一個資料庫 goshop_app。
+-->
+
+---
+
+# GoShop 第 13 步：解題提示
+### Store 介面
+
+```go
+// goshop/internal/store/store.go
+// Store 是 GoShop 的資料存取介面，Memory 和 MySQL 都實作它。
+type Store interface {
+	Products(ctx context.Context) ([]shop.Product, error)
+	Product(ctx context.Context, sku string) (shop.Product, error)
+	SaveProduct(ctx context.Context, p shop.Product) error
+	PlaceOrder(ctx context.Context, o *shop.Order) error
+	Order(ctx context.Context, id int) (shop.Order, error)
+	Orders(ctx context.Context) ([]shop.Order, error)
+	MarkPaid(ctx context.Context, id int, by string) error
+}
+
+var (
+	_ Store = (*Memory)(nil)
+	_ Store = (*MySQL)(nil)
+)
+```
+
+```go
+// goshop/internal/checkout/checkout.go
+type Service struct {
+	Store   store.Store
+```
+
+<!--
+Store 介面列出了 GoShop 需要的所有資料操作：查商品、存商品、下單、查訂單、標記付款。
+
+下面的兩行是第 7 章學的編譯時期檢查，確認 Memory 和 MySQL 都完整實作了這個介面。少寫一個方法、參數型別不對，編譯就會失敗。
+
+checkout 的 Service 只改了一個地方：Store 欄位的型別從 *store.Memory 改成 store.Store。結帳的邏輯一行都不用動，這就是「依賴介面，而不是依賴實作」。
+-->
+
+---
+
+# GoShop 第 13 步：解題提示（續）
+### 用交易扣庫存
+
+```go
+// goshop/internal/store/mysql_order.go
+func (s *MySQL) PlaceOrder(ctx context.Context, o *shop.Order) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() // Commit 成功之後再 Rollback 不會有任何作用
+
+	var errs []error
+	for _, l := range o.Lines {
+		// 用 stock >= ? 當條件：庫存不夠就不會更新到任何一列
+		res, err := tx.ExecContext(ctx, `UPDATE products SET stock = stock - ?
+			WHERE sku = ? AND stock >= ?`, l.Qty, l.SKU, l.Qty)
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			errs = append(errs, s.stockError(ctx, tx, l))
+		}
+	}
+	if err := errors.Join(errs...); err != nil {
+		return err
+	}
+```
+
+<!--
+PlaceOrder 是整個 MySQL 版本最重要的方法。
+
+BeginTx 開始一個交易，接下來所有的操作都用 tx 執行。defer tx.Rollback 是一個保險：函式中途任何地方 return，交易都會被復原；如果最後 Commit 成功了，Rollback 就不會有任何作用。
+
+扣庫存的 UPDATE 有一個關鍵的條件：stock >= ?。庫存不夠的時候，這個條件不成立，UPDATE 就不會改到任何資料，RowsAffected 是 0。這樣「檢查庫存」和「扣庫存」是同一個 SQL 敘述，資料庫保證它是原子的，不會有兩個人同時買走最後一件的問題。
+
+RowsAffected 是 0 的時候，stockError 再查一次目前的庫存，組出第 6 章的 StockError。
+-->
+
+---
+
+# GoShop 第 13 步：解題提示（續 2）
+### 寫入訂單，最後 Commit
+
+```go
+// goshop/internal/store/mysql_order.go
+	res, err := tx.ExecContext(ctx, `INSERT INTO orders
+		(subtotal, discount, total, status, paid_by, coupon, created_at, ship_by)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		o.Subtotal, o.Discount, o.Total, o.Status, nullString(o.PaidBy),
+		nullString(o.Coupon), o.CreatedAt, o.ShipBy)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	// ...
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	o.ID = int(id)
+	return nil
+}
+
+// ...
+// nullString 把空字串存成資料庫的 NULL。
+func nullString(s string) sql.Null[string] {
+	return sql.Null[string]{V: s, Valid: s != ""}
+}
+```
+
+<!--
+庫存都扣成功之後，寫入訂單。訂單編號是資料庫的 AUTO_INCREMENT 自動產生的，用 LastInsertId 取得。中間省略的部分是用同一個交易寫入每一行訂單明細。
+
+全部完成後才 Commit。只要 Commit 之前有任何錯誤，defer 的 Rollback 就會把前面扣掉的庫存全部復原，這就是交易「全部成功或全部失敗」的保證，也是第 6 章我們在記憶體版本裡自己實作的規則。
+
+沒有付款方式、沒有折價券的時候，我們存 NULL 而不是空字串，用的是本章學的 sql.Null 泛型型別。
+-->
+
+---
+
+# GoShop 第 13 步：解題提示（續 3）
+### 合約測試：兩種實作，同一組測試
+
+```go
+// goshop/internal/store/store_test.go
+// testStore 是「合約測試」：任何 Store 實作都必須通過同一組測試。
+func testStore(t *testing.T, st Store) {
+	// ...
+}
+
+func TestMemory(t *testing.T) {
+	testStore(t, NewMemory())
+}
+
+// 設定環境變數才會執行，例如：
+// GOSHOP_TEST_DSN="gouser:gopass@tcp(127.0.0.1:3306)/goshop_test" go test ./...
+func TestMySQL(t *testing.T) {
+	dsn := os.Getenv("GOSHOP_TEST_DSN")
+	if dsn == "" {
+		t.Skip("沒有設定 GOSHOP_TEST_DSN，略過 MySQL 測試")
+	}
+	st, err := OpenMySQL(t.Context(), dsn)
+	// ...
+	testStore(t, st)
+}
+```
+
+<!--
+有了兩種實作，要怎麼確定它們的行為一模一樣？例如庫存不足時，兩者都要傳回 StockError，而且都不能扣到其他商品的庫存。
+
+答案是合約測試：把測試寫成一個接收 Store 介面的函式，記憶體版和 MySQL 版各呼叫一次。testStore 的內容就是下單、庫存不足、重複付款、查不到訂單這些情境。
+
+MySQL 的測試需要資料庫，沒有設定環境變數的時候用 t.Skip 略過，這樣其他人沒有安裝 MySQL，go test 也能通過。t.Context 是 Go 1.24 新增的，測試結束時會自動取消。
+-->
+
+---
+
+# GoShop 第 13 步：解題提示（續 4）
+### main：用介面變數切換實作
+
+```go
+// goshop/main.go
+	var st store.Store
+	if opt.dsn != "" {
+		db, err := store.OpenMySQL(ctx, opt.dsn)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		st = db
+	} else {
+		mem, err := openStore(opt.dir)
+		if err != nil {
+			return err
+		}
+		st = mem
+	}
+	// ...
+	// 只有記憶體版需要存快照；用型別斷言判斷實際的型別
+	if mem, ok := st.(*store.Memory); ok {
+		return saveStore(mem, opt.dir)
+	}
+```
+
+```text
+$ export GOSHOP_DSN="gouser:gopass@tcp(127.0.0.1:3306)/goshop_app"
+$ go run . -import data/new-products.csv && go run . -buy SKU-003:2
+```
+
+<!--
+main 宣告一個介面型別的變數 st，有設定 DSN 就放 MySQL 版本，沒有就放記憶體版本。之後的程式碼只認得 st 這個介面，完全不知道背後是哪一種。
+
+唯一的例外是存快照：只有記憶體版本需要存。這裡用第 7 章的型別斷言，判斷 st 實際的型別是不是 *store.Memory。
+
+DSN 從環境變數讀取，不寫在程式碼裡，這是本章提醒過的資安觀念。設定好之後，所有的指令都會改用 MySQL，大家可以用 MySQL Workbench 或命令列看看 orders 和 order_lines 資料表的內容。
+-->
+
+---
 
 # 章節總結
 
@@ -1183,6 +1424,7 @@ Go 這邊只需要讀出兩個欄位並印出來。在 main 裡呼叫 s.SaveFizz
 - **安全**：**一律使用佔位符 `?`**，杜絕 SQL Injection
 - **查詢**：`QueryContext` + `defer rows.Close()` + `rows.Next()` + `Scan` + `rows.Err()`；單筆用 `QueryRowContext`，查無資料是 `sql.ErrNoRows`
 - **NULL 與交易**：`sql.Null[T]`（1.22+）；`BeginTx` + `defer tx.Rollback()` + `Commit`
+- **GoShop**：抽出 `Store` 介面，新增 MySQL 實作；用交易與 `stock >= ?` 條件安全地扣庫存；合約測試讓兩種實作行為一致
 
 下一章我們會介紹「HTTP 客戶端」：用 Go 呼叫網路上的 API。
 
@@ -1190,6 +1432,8 @@ Go 這邊只需要讀出兩個欄位並印出來。在 main 裡呼叫 s.SaveFizz
 我們來整理今天學到的東西。
 
 Go 用 database/sql 加上驅動程式連接資料庫，*sql.DB 是連線池，程式啟動時建立一次。所有操作用 Context 版本，執行用 ExecContext、查詢用 QueryContext 和 QueryRowContext。最重要的安全觀念：一律使用佔位符，杜絕 SQL Injection。查詢完記得 Close 和檢查 rows.Err()，需要「全部成功或全部不做」的時候用交易。
+
+GoShop 這一步換上了真正的資料庫。我們先把 store 抽象成 Store 介面，再寫一個 MySQL 版本；結帳程式一行都不用改，只要換掉傳進去的 Store。扣庫存用交易加上 stock >= ? 的條件，確保庫存永遠不會變成負數。
 
 到這裡，我們已經能把資料存在資料庫裡了。接下來兩章要進入網路的世界：下一章學 HTTP 客戶端，用 Go 呼叫網路上的 API、取得 JSON 資料；第 15 章學 HTTP 伺服器，把今天的資料庫操作包裝成 API，讓別人呼叫。
 -->

@@ -61,6 +61,7 @@ layout: default
 - **go vet 與靜態分析** — 找出可疑的程式碼；staticcheck、golangci-lint；`go fix`
 - **go doc** — 查詢與產生文件
 - **go get / go install / go tool** — 下載模組與工具
+- **GoShop 專案實作** — 第 17 步：版本號、跨平台發佈與文件
 - **章節總結**
 
 <!--
@@ -782,6 +783,125 @@ ExampleGreeting 的 Output 可以有多行，每一行都要跟實際輸出完�
 -->
 
 ---
+layout: section
+class: flex flex-col justify-center items-center text-center
+---
+
+# GoShop 專案實作
+## 第 17 步：準備發佈
+
+<!--
+回到 GoShop。功能已經差不多齊全了，接下來要準備把它交給別人使用：店長用的是 Windows，伺服器是 Linux，另一位開發者用 Mac。
+
+今天學的 Go 工具，就是讓「交付」這件事變得簡單又可靠的關鍵。
+-->
+
+---
+
+# GoShop 第 17 步：準備發佈
+### 任務說明
+
+1. `main.go` 宣告 `var version = "dev"`，加上 `-version` 旗標；編譯時用 **`-ldflags "-X main.version=…"`** 注入
+2. 寫一個 `Makefile`：
+   - `make check`：`gofmt -l`、`go vet`、`go test -race`
+   - `make release`：編譯 linux/amd64、darwin/arm64、windows/amd64 三個版本
+3. 新增 `doc.go`：`main` 套件的說明文件（用法）
+4. 替 `money` 寫一個 **Example 函式**，讓 `go doc` 顯示範例、`go test` 驗證輸出
+5. 執行 `go fix -diff ./...`，確認程式碼已經是最新的寫法
+
+```text
+$ make release VERSION=v1.0.0
+編譯 linux/amd64
+編譯 darwin/arm64
+編譯 windows/amd64
+$ ./bin/goshop-linux-amd64 -version
+GoShop v1.0.0
+```
+
+<!--
+這一步不會加新功能，而是替 GoShop 做好「上線前的準備」。
+
+版本號很重要：顧客回報問題的時候，第一句話一定是「你用的是哪一版？」。用 ldflags 在編譯時注入版本號，程式碼裡不需要每次發佈都手動修改。
+
+Makefile 把常用的指令集中起來。以後提交程式碼之前，只要打 make check；要發佈新版本，只要打 make release。Windows 的同學如果沒有 make，也可以直接把裡面的指令貼到終端機執行。
+-->
+
+---
+
+# GoShop 第 17 步：解題提示
+### 注入版本號與跨平台編譯
+
+```go
+// goshop/main.go
+// version 在編譯時用 -ldflags "-X main.version=v1.0.0" 注入
+var version = "dev"
+```
+
+```makefile
+# goshop/Makefile
+VERSION ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
+LDFLAGS := -s -w -X main.version=$(VERSION)
+PLATFORMS := linux/amd64 darwin/arm64 windows/amd64
+# ...
+# 跨平台編譯：GOOS／GOARCH 決定目標作業系統與 CPU 架構
+release:
+	@for p in $(PLATFORMS); do \
+		os=$${p%/*}; arch=$${p#*/}; ext=; \
+		[ $$os = windows ] && ext=.exe; \
+		echo "編譯 $$os/$$arch"; \
+		GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 \
+			go build -ldflags "$(LDFLAGS)" -o bin/goshop-$$os-$$arch$$ext . ; \
+	done
+```
+
+<!--
+version 是一個套件層級的字串變數，預設值是 dev。-ldflags "-X main.version=v1.0.0" 會在連結的時候，把 main 套件的 version 換成 v1.0.0。注意 -X 只能用在字串變數，而且不能是常數。
+
+Makefile 的 VERSION 預設用 git describe 取得最近的 Git 標籤，所以打了 v1.0.0 的標籤之後，make release 編出來的就是 v1.0.0。-s -w 會拿掉除錯資訊，讓執行檔小一點。
+
+release 用迴圈把三個平台都編譯一次。GOOS 和 GOARCH 決定目標平台，CGO_ENABLED=0 確保是純 Go 的靜態執行檔。我們用的 MySQL 驅動、bcrypt 都是純 Go 寫的，所以可以放心關掉 cgo。Makefile 裡的錢字號要寫兩個，才能傳給 shell。
+-->
+
+---
+
+# GoShop 第 17 步：解題提示（續）
+### 文件註解與 Example 測試
+
+```go
+// goshop/internal/money/example_test.go
+func ExampleMoney_String() {
+	price := money.Money(1280)
+	fmt.Println(price)
+	fmt.Println(price.Times(3))
+	fmt.Println(money.Money(-300))
+	// Output:
+	// NT$1,280
+	// NT$3,840
+	// -NT$300
+}
+```
+
+```text
+$ go doc goshop/internal/money
+package money // import "goshop/internal/money"
+
+Package money 處理新台幣金額。
+
+type Money int
+$ go test ./internal/money -run Example -v
+=== RUN   ExampleMoney_String
+--- PASS: ExampleMoney_String (0.00s)
+```
+
+<!--
+Example 函式的名稱規則是 Example 加上型別名稱、底線、方法名稱，所以 ExampleMoney_String 就是 Money.String 方法的範例。它放在 money_test 套件，也就是從外部使用者的角度來寫，所以要寫 money.Money。
+
+最後的 Output 註解是期望的輸出。go test 會真的執行這個函式，比對印出來的內容，不一樣就算失敗。所以 Example 既是文件，也是測試，而且永遠不會過期。
+
+go doc 會顯示套件的說明，也就是第 8 章寫的「Package money 處理新台幣金額」。在 pkg.go.dev 上，Example 還會顯示成可以執行的範例。
+-->
+
+---
 
 # 章節總結
 
@@ -793,6 +913,7 @@ ExampleGreeting 的 Output 可以有多行，每一行都要跟實際輸出完�
 - **靜態分析**：`go vet ./...`；golint 已停止維護 → **staticcheck**、**golangci-lint**、**govulncheck**；`go fix` 現代化（1.26+）
 - **文件**：`go doc`；文件註解以名稱開頭；`ExampleXxx` 是文件也是測試
 - **模組與工具**：`go get` 只管 `go.mod`；工具用 `go install` 或 `go get -tool` + `go tool`（1.24+）
+- **GoShop**：`-ldflags -X` 注入版本號；Makefile 一次檢查、跨平台編譯；文件註解與 Example 測試
 
 下一章我們會介紹「加密安全」：雜湊、對稱與非對稱加密、數位簽章與 HTTPS。
 
@@ -800,6 +921,8 @@ ExampleGreeting 的 Output 可以有多行，每一行都要跟實際輸出完�
 我們來整理今天學到的東西。
 
 go build 可以用 ldflags 注入版本、用 GOOS 和 GOARCH 跨平台編譯。gofmt 讓所有 Go 程式碼長得一樣，gopls 讓編輯器變聰明。go vet 找出可疑的程式碼，staticcheck、golangci-lint、govulncheck 提供更完整的檢查，go fix 可以自動現代化程式碼。go doc 查詢文件，Example 函式是可以執行的文件。go get 管理相依模組，go install 和 go tool 管理工具。
+
+GoShop 這一步做好了發佈的準備：用 -ldflags 把版本號編譯進執行檔，用 Makefile 把 gofmt、go vet、go test -race 和跨平台編譯變成一行指令，再補上 go doc 看得到的文件和可以執行的 Example。
 
 下一章要進入一個很重要的主題：加密安全。密碼要怎麼存、資料要怎麼加密、怎麼確認資料沒有被竄改、HTTPS 是怎麼運作的。Go 的標準函式庫 crypto 套件非常完整，而且是由密碼學專家維護的，我們會學到怎麼正確地使用它。
 -->

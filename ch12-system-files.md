@@ -61,6 +61,7 @@ layout: default
 - **建立與寫入檔案** — 建立、寫入、檢查存在、讀取整個檔案、逐行讀取、刪除
 - **os.OpenFile()** — 最完整的檔案開啟方式
 - **處理 CSV 格式檔案** — `encoding/csv`
+- **GoShop 專案實作** — 第 12 步：命令列工具、CSV 與檔案權限
 - **章節總結**
 
 <!--
@@ -1318,6 +1319,218 @@ main 負責處理旗標和輸出。-in 是必填的，沒有給的話呼叫 flag
 -->
 
 ---
+layout: section
+class: flex flex-col justify-center items-center text-center
+---
+
+# GoShop 專案實作
+## 第 12 步：命令列工具與檔案
+
+<!--
+回到 GoShop。現在的 GoShop 每次執行都做一樣的事：結帳幾台寫死在程式裡的購物車。
+
+真實的店長會想要：「幫我列出商品」「把供應商給的 CSV 匯進來」「幫我下一張單」「把這個月的訂單匯出成 Excel 看得懂的格式」。今天學的旗標、檔案和 CSV，就是用來做這些事的。
+-->
+
+---
+
+# GoShop 第 12 步：命令列工具與檔案
+### 任務說明
+
+| 旗標 | 功能 |
+| --- | --- |
+| `-data 資料夾` | 資料存放位置（預設 `data`），建立時權限 `0700` |
+| `-list` | 列出所有商品 |
+| `-import 檔名.csv` | 從 CSV 匯入或更新商品；**格式錯誤的行略過並回報行號** |
+| `-export 檔名.csv` | 把訂單匯出成 CSV |
+| `-buy SKU:數量,…` `-coupon 代碼` | 下單並以貨到付款結帳 |
+
+- 每張訂單都以 **JSON Lines** 格式**附加**到 `data/orders.log`（權限 `0600`）
+- gob 快照改用 `os.OpenFile` 建立，權限 `0600`：只有自己能讀寫
+
+<!--
+這一步要把 GoShop 變成一個命令列工具。
+
+表格列出了要支援的旗標。每一次執行只做一件事，做完就把資料存回快照，這是很多命令列工具的設計方式。
+
+檔案權限的部分，資料檔裡有顧客的訂單，不應該讓同一台電腦上的其他使用者看到，所以資料夾用 0700、檔案用 0600。
+
+訂單日誌用的是 JSON Lines 格式：每一行是一筆完整的 JSON。它最大的好處是可以一直往檔案後面附加，不需要讀出整個檔案再寫回去。
+-->
+
+---
+
+# GoShop 第 12 步：預期結果
+
+```text
+$ go run . -import data/new-products.csv
+已匯入 2 項商品
+以下資料列被略過：
+ 第 4 行：strconv.Atoi: parsing "二千": invalid syntax
+$ go run . -buy SKU-003:2,SKU-005:3 -coupon WEEK15
+訂單 #1 成立：NT$2,482（貨到付款），預計 2026-09-28 出貨
+$ go run . -buy SKU-001:x
+錯誤： 品項格式錯誤："SKU-001:x"（應為 SKU:數量）
+$ go run . -export orders.csv && cat orders.csv
+已匯出 1 張訂單到 orders.csv
+id,created_at,items,total,status,paid_by
+1,2026-09-24 15:14:07,2,2482,已付款,貨到付款
+$ ls -l data
+-rw------- 1 user user 783 Sep 24 15:14 goshop.gob
+-rw------- 1 user user 351 Sep 24 15:14 orders.log
+```
+
+<!--
+這是一連串操作的結果。
+
+先匯入供應商的 CSV，其中第 4 行的價格寫成「二千」，被略過了，但其他兩行還是成功匯入。這是處理外部資料時很重要的觀念：一行壞掉不應該讓整批資料都匯入失敗，但一定要告訴使用者是哪一行出問題。
+
+接著下一張單、試一個格式錯誤的指令，最後把訂單匯出成 CSV。用 ls -l 看，資料檔的權限都是 rw 加上六個減號，只有擁有者能讀寫。
+-->
+
+---
+
+# GoShop 第 12 步：解題提示
+### 旗標綁定到結構的欄位
+
+```go
+// goshop/main.go
+// options 是命令列旗標解析後的設定
+type options struct {
+	dir       string // 資料夾位置
+	list      bool   // 列出商品
+	importCSV string // 要匯入的商品 CSV
+	exportCSV string // 要匯出的訂單 CSV
+	buy       string // 下單內容
+	coupon    string // 折價券代碼
+}
+
+func main() {
+	var opt options
+	flag.StringVar(&opt.dir, "data", "data", "資料夾位置")
+	flag.BoolVar(&opt.list, "list", false, "列出所有商品")
+	// ...
+	flag.Parse()
+```
+
+<!--
+旗標一多，一個一個宣告成變數會很亂，所以我們把所有設定集中在一個 options 結構裡。
+
+flag.StringVar 和 flag.String 的差別是：StringVar 把旗標綁定到一個已經存在的變數，這裡就是 opt 的欄位。第三個參數是預設值，第四個是說明文字，執行 go run . -h 的時候會顯示出來。
+
+最後一定要呼叫 flag.Parse，旗標的值才會被填進去。
+-->
+
+---
+
+# GoShop 第 12 步：解題提示（續）
+### 依旗標決定要做什麼
+
+```go
+// goshop/main.go
+func run(opt options) error {
+	// 資料夾只有自己可以讀寫（rwx------）
+	if err := os.MkdirAll(opt.dir, 0o700); err != nil {
+		return err
+	}
+	st, err := openStore(opt.dir)
+	if err != nil {
+		return err
+	}
+
+	switch {
+	case opt.importCSV != "":
+		err = importProducts(st, opt.importCSV)
+	case opt.exportCSV != "":
+		err = exportOrders(st, opt.exportCSV)
+	case opt.buy != "":
+		err = placeOrder(st, opt.dir, opt.buy, opt.coupon)
+	case opt.list:
+		err = listProducts(st)
+	// ...
+```
+
+<!--
+run 函式把 main 的工作拆出來，並且傳回 error。main 只要呼叫 run，有錯誤就印出來、用 os.Exit(1) 結束。這樣 run 裡面可以放心用 return err，而不用到處寫 os.Exit。
+
+MkdirAll 建立資料夾，權限是八進位的 0o700，也就是擁有者可以讀、寫、進入，其他人什麼都不行。資料夾已經存在的時候，MkdirAll 不會報錯。
+
+接著用無條件 switch，依照哪個旗標有值，決定要做哪件事。
+-->
+
+---
+
+# GoShop 第 12 步：解題提示（續 2）
+### 讀取 CSV：記住行號
+
+```go
+// goshop/internal/store/csv.go
+func ReadProductsCSV(r io.Reader) ([]shop.Product, error) {
+	cr := csv.NewReader(r)
+	cr.FieldsPerRecord = 4 // 每一行都必須剛好 4 個欄位
+	records, err := cr.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("讀取 CSV：%w", err)
+	}
+
+	var products []shop.Product
+	var errs []error
+	for i, rec := range records {
+		if i == 0 {
+			continue // 跳過標題列
+		}
+		price, err1 := strconv.Atoi(rec[2])
+		stock, err2 := strconv.Atoi(rec[3])
+		if err := errors.Join(err1, err2); err != nil {
+			errs = append(errs, fmt.Errorf("第 %d 行：%w", i+1, err))
+			continue
+		}
+```
+
+<!--
+讀 CSV 用 encoding/csv 的 Reader。FieldsPerRecord 設成 4，欄位數不對的行，ReadAll 就會直接回報錯誤。
+
+走訪每一筆資料，第 0 筆是標題列，跳過。價格和庫存都要從字串轉成整數，兩個轉換的錯誤用 errors.Join 合在一起，任何一個失敗就記下錯誤並略過這一行。
+
+錯誤訊息的行號是 i 加 1，因為切片的索引從 0 開始，但人在看檔案的時候是從第 1 行開始數。這種小細節，就是好用和不好用的差別。
+-->
+
+---
+
+# GoShop 第 12 步：解題提示（續 3）
+### OpenFile：附加寫入與檔案權限
+
+```go
+// goshop/main.go
+// appendLog 把訂單以 JSON Lines 格式附加到 orders.log 的最後面
+func appendLog(dir string, o shop.Order) error {
+	f, err := os.OpenFile(filepath.Join(dir, "orders.log"),
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return json.NewEncoder(f).Encode(o) // Encode 會在結尾加上換行
+}
+```
+
+| 旗標 | 意義 |
+| --- | --- |
+| `O_APPEND` | 寫入時一律接在檔案最後面 |
+| `O_CREATE` | 檔案不存在就建立（權限 `0600`） |
+| `O_WRONLY` | 只寫入 |
+
+<!--
+appendLog 用 os.OpenFile 開啟日誌檔，它是今天學的「最完整的檔案開啟功能」。
+
+三個旗標用位元 OR 組合起來：O_APPEND 讓每次寫入都接在最後面，舊的訂單不會被覆蓋；O_CREATE 讓第一次執行時自動建立檔案；O_WRONLY 表示只寫不讀。第三個參數 0o600 是建立檔案時的權限。
+
+寫入的部分，json.Encoder 的 Encode 每次會寫出一筆 JSON 再加一個換行，剛好就是 JSON Lines 的格式。
+
+快照檔 saveStore 也改用 OpenFile，旗標是 O_WRONLY、O_CREATE、O_TRUNC，權限一樣是 0600。
+-->
+
+---
 
 # 章節總結
 
@@ -1328,6 +1541,7 @@ main 負責處理旗標和輸出。-in 是必填的，沒有給的話呼叫 flag
 - **讀取**：`os.ReadFile` 讀整個檔案；大檔案用 `bufio.Scanner` 逐行讀取，結束後檢查 `sc.Err()`
 - **存在與刪除**：`os.Stat` + `errors.Is(err, fs.ErrNotExist)`；`os.Remove` / `RemoveAll`；路徑用 `filepath.Join`
 - **CSV**：`csv.NewReader(r).Read()` 讀到 `io.EOF`；`csv.NewWriter(w)` 寫完要 `Flush()`
+- **GoShop**：用 `flag` 做成命令列工具；CSV 匯入商品、匯出訂單；`OpenFile` 附加訂單日誌、`0600` 保護資料檔
 
 下一章我們會介紹「SQL 與資料庫」：用 Go 連接 MySQL，完成資料的新增、查詢、更新。
 
@@ -1335,6 +1549,8 @@ main 負責處理旗標和輸出。-in 是必填的，沒有給的話呼叫 flag
 我們來整理今天學到的東西。
 
 命令列的部分，flag 套件可以輕鬆處理各種旗標。系統訊號的部分，目標是優雅關閉，現代寫法是 signal.NotifyContext。檔案的部分，記得開檔案之後馬上 defer Close，小檔案用 ReadFile、WriteFile，大檔案用 Scanner 逐行讀取。CSV 用 encoding/csv 處理，寫入記得 Flush。
+
+GoShop 這一步變成了一個真正的命令列工具：用旗標決定要列出商品、匯入 CSV、下單還是匯出報表；每一張訂單都用 OpenFile 附加到日誌檔的最後面；資料檔的權限設成 0600，只有自己看得到。
 
 今天把資料存在檔案裡，但檔案有很多限制：多個程式同時寫入會衝突、要找某一筆資料得從頭讀到尾。所以真正的應用程式，資料都存在資料庫裡。下一章就要學怎麼用 Go 連接 MySQL 資料庫，用 SQL 新增、查詢、更新資料。
 -->

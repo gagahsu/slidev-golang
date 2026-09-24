@@ -62,6 +62,7 @@ layout: default
 - **自訂型別** — `type` 定義新型別
 - **結構 (struct)** — 定義、比較、內嵌、方法
 - **介面與型別檢查** — 型別轉換、型別斷言、型別 switch
+- **GoShop 專案實作** — 第 4 步：商品結構、購物車與商品目錄
 - **章節總結**
 
 <!--
@@ -1525,6 +1526,125 @@ Summary 用 make 建立 map，第二個參數是預估大小，可以減少 map 
 -->
 
 ---
+layout: section
+class: flex flex-col justify-center items-center text-center
+---
+
+# GoShop 專案實作
+## 第 4 步：商品與購物車
+
+<!--
+回到 GoShop。前三步我們都用一個一個獨立的變數來存商品：name、price、stock。只有一項商品還好，如果有一百項商品，就需要三百個變數，這顯然不行。
+
+今天學的結構、切片和 map，就是用來把相關的資料組織在一起的。
+-->
+
+---
+
+# GoShop 第 4 步：商品與購物車
+### 任務說明
+
+1. 定義結構 `Product`（`SKU`、`Name`、`Price`、`Stock`）與 `Item`（`SKU`、`Qty`）
+2. 定義 `Cart` 結構，裡面是 `Items []Item`
+3. 方法 `(c *Cart) Add(sku string, qty int)`：同一個 SKU 要**合併數量**
+4. 方法 `(c Cart) Total(catalog map[string]Product) int`：用商品目錄查價、算總金額
+5. 建立以 SKU 為鍵的商品目錄 `map[string]Product`；加入購物車前先用 **comma ok** 確認商品存在
+
+```text
+找不到商品： SKU-999
+===== 購物車 =====
+SKU-001 衣索比亞咖啡豆 x 3 = 1350
+SKU-003 手沖壺 x 1 = 1280
+SKU-004 馬克杯 x 2 = 700
+品項數： 3
+總金額： 3330
+```
+
+<!--
+這一步要替 GoShop 建立三個結構：商品 Product、購物車品項 Item、購物車 Cart。
+
+購物車有兩個方法。Add 負責放商品進去，如果購物車裡已經有同一個商品，就把數量加上去，而不是多一行。Total 負責算總金額。
+
+為什麼 Add 用指標接收器，Total 用值接收器？因為 Add 要修改購物車的內容，Total 只是讀取。這就是今天「使用方法的注意事項」講的重點。
+
+最後，商品目錄用 map 存，SKU 當鍵，這樣用 SKU 查商品就不需要走訪整個切片。
+-->
+
+---
+
+# GoShop 第 4 步：解題提示
+### 結構與指標接收器
+
+```go
+// goshop/main.go
+// Item 是購物車裡的一個品項
+type Item struct {
+	SKU string
+	Qty int
+}
+
+// Cart 是購物車
+type Cart struct {
+	Items []Item
+}
+
+// Add 把商品放進購物車；同一個 SKU 會合併數量
+func (c *Cart) Add(sku string, qty int) {
+	for i := range c.Items {
+		if c.Items[i].SKU == sku {
+			c.Items[i].Qty += qty
+			return
+		}
+	}
+	c.Items = append(c.Items, Item{SKU: sku, Qty: qty})
+}
+```
+
+<!--
+Add 方法先走訪購物車，找找看有沒有同一個 SKU。
+
+這裡有一個很重要的細節：迴圈寫成 for i := range c.Items，然後用 c.Items[i].Qty 修改。如果寫成 for _, it := range c.Items，再修改 it.Qty，改到的只是複本，購物車裡的數量不會變。這是切片最常見的陷阱之一。
+
+找不到的話，就用 append 加一個新的品項。因為 append 可能會產生新的底層陣列，所以要把結果指定回 c.Items，而且接收器必須是指標，外面的購物車才會看到改變。
+-->
+
+---
+
+# GoShop 第 4 步：解題提示（續）
+### 用 map 查價、comma ok 慣用法
+
+```go
+// goshop/main.go
+// Total 用商品目錄查價，計算購物車總金額
+func (c Cart) Total(catalog map[string]Product) int {
+	total := 0
+	for _, it := range c.Items {
+		total += catalog[it.SKU].Price * it.Qty
+	}
+	return total
+}
+```
+
+```go
+// goshop/main.go
+	for _, sku := range []string{"SKU-004", "SKU-999"} {
+		if _, ok := catalog[sku]; !ok { // comma ok 慣用法
+			fmt.Println("找不到商品：", sku)
+			continue
+		}
+		cart.Add(sku, 2)
+	}
+```
+
+<!--
+Total 用值接收器，因為它只需要讀取。用 SKU 從 map 拿出商品，單價乘以數量加起來就是總金額。
+
+下面這段示範 comma ok 慣用法。map 查不到鍵的時候不會出錯，而是傳回零值，所以直接 catalog["SKU-999"] 會得到一個價格是 0 的空商品，這很危險。用第二個傳回值 ok 判斷鍵存不存在，才是正確的做法。
+
+執行後 SKU-999 會被擋下來，購物車裡有三個品項，總金額 3330 元。
+-->
+
+---
 
 # 章節總結
 
@@ -1535,6 +1655,7 @@ Summary 用 make 建立 map，第二個參數是預估大小，可以減少 map 
 - **自訂型別**：`type Celsius float64` 讓編譯器幫忙擋住單位錯誤
 - **struct**：組合欄位；內嵌實現「組合勝過繼承」；方法分值接收器與指標接收器
 - **型別轉換與斷言**：`T(v)` 明確轉型；`any` 用 `x.(T)` 或型別 switch 取回原型別
+- **GoShop**：用 `Product`、`Cart` 結構表示商品與購物車，以 `map` 做商品目錄，替購物車加上方法
 
 下一章我們會深入「函式」：多重回傳值、閉包、函式型別與 defer。
 
@@ -1544,6 +1665,8 @@ Summary 用 make 建立 map，第二個參數是預估大小，可以減少 map 
 三種集合型別裡，切片是最常用的，要記住它的三個欄位，以及 append 一定要接住、共用底層陣列要小心這兩個重點。map 要記住 comma ok 慣用法和走訪順序是隨機的。
 
 struct 是 Go 組織資料的方式，搭配方法和內嵌，就能做到其他語言用類別做的事。最後的型別斷言和型別 switch，第 7 章學介面時會再深入。
+
+GoShop 也終於有了像樣的資料結構：商品是一個 struct，購物車裡的品項是一個切片，商品目錄是以 SKU 為鍵的 map，購物車的 Add 和 Total 則是今天學的方法。
 
 今天我們已經寫了很多函式和方法，下一章會正式、完整地介紹函式：多重回傳值、參數不定函式、匿名函式與閉包，以及 Go 特有的 defer。
 -->

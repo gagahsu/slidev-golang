@@ -63,6 +63,7 @@ layout: default
 - **使用靜態網頁資源** — 靜態檔案、`embed`、模板檔案
 - **表單與 POST** — 讀取表單、更新伺服器資料
 - **簡易 RESTful API** — 交換 JSON 資料、中介軟體、優雅關閉
+- **GoShop 專案實作** — 第 15 步：RESTful API 與後台網頁
 - **章節總結**
 
 <!--
@@ -1516,6 +1517,270 @@ mux.HandleFunc("DELETE /api/todos/{id}", api.removeTodo)
 -->
 
 ---
+layout: section
+class: flex flex-col justify-center items-center text-center
+---
+
+# GoShop 專案實作
+## 第 15 步：API 與後台網頁
+
+<!--
+回到 GoShop。到目前為止，GoShop 都是在終端機裡操作的命令列工具。
+
+但顧客不會打開終端機買東西。今天學了 HTTP 伺服器，我們終於可以讓 GoShop 變成一個網站：給前端和手機 App 用的 JSON API，加上給店長用的後台網頁。
+-->
+
+---
+
+# GoShop 第 15 步：API 與後台網頁
+### 任務說明
+
+| 方法與路徑 | 功能 | 成功 | 常見錯誤 |
+| --- | --- | --- | --- |
+| `GET /api/products` | 商品清單 | 200 | |
+| `GET /api/products/{sku}` | 單一商品 | 200 | 404 |
+| `POST /api/orders` | 下單（JSON 購物車） | 201 + `Location` | 400、409 |
+| `GET /api/orders/{id}` | 查詢訂單 | 200 | 400、404 |
+| `POST /api/orders/{id}/pay` | 付款（`cod`／`card`） | 200 | 404、409 |
+| `GET /admin` | 後台：商品與訂單列表 | 200 | |
+| `POST /admin/products` | 後台表單：新增或更新商品 | 303 | 400 |
+
+- 模板與 CSS 用 **`embed`** 編譯進執行檔；每個請求用 `slog` 記錄
+- `go run . -http :8080`，按 Ctrl+C 時**優雅關閉**，記憶體版本關閉前存檔
+
+<!--
+這是 GoShop 網站的所有路由，前五個是 JSON API，後兩個是後台網頁。
+
+設計 API 的時候，狀態碼要用對：新增成功是 201 Created，並且在 Location 標頭告訴客戶端新訂單的網址；找不到是 404；庫存不足、重複付款這種「和目前狀態衝突」的情況是 409 Conflict；客戶端送來的資料有問題是 400。
+
+後台表單送出成功之後回 303，讓瀏覽器重新導向到後台首頁，等一下會解釋為什麼。
+-->
+
+---
+
+# GoShop 第 15 步：預期結果
+
+```text
+$ curl -i -X POST localhost:8080/api/orders \
+    -d '{"items":[{"sku":"SKU-001","qty":2}],"coupon":"WEEK15"}'
+HTTP/1.1 201 Created
+Location: /api/orders/1
+{"id":1,"lines":[…],"subtotal":900,"discount":135,"total":765,
+ "status":"pending","coupon":"WEEK15","created_at":"2026-09-24T15:19:07+08:00",…}
+
+$ curl -X POST localhost:8080/api/orders/1/pay -d '{"method":"card","last4":"4242"}'
+{"id":1,…,"status":"paid","paid_by":"信用卡 *4242",…}
+
+$ curl -X POST localhost:8080/api/orders -d '{"items":[{"sku":"SKU-003","qty":99}]}'
+{"error":"結帳失敗：SKU-003 庫存不足：想買 99 件，只剩 5 件"}
+```
+
+<!--
+這是用 curl 測試 API 的結果。
+
+第一個請求下單，回應 201 和 Location 標頭，訂單狀態是 pending 待付款。第二個請求用信用卡付款，狀態變成 paid。第三個請求想買 99 個手沖壺，得到 409 和清楚的錯誤訊息。
+
+大家也可以用 VS Code 的 REST Client 擴充套件，或是 Postman 這類工具來測試，會比 curl 方便。
+-->
+
+---
+
+# GoShop 第 15 步：後台網頁
+
+<img src="/img/goshop/admin.png" class="h-110 mx-auto border rounded shadow" alt="GoShop 後台">
+
+<!--
+這是瀏覽器打開 localhost:8080/admin 看到的後台網頁。
+
+上面是商品列表，手沖壺只剩 2 件，庫存少於 5 件的商品會用紅字提醒店長補貨。中間是新增商品的表單，SKU 已經存在的話就是更新。下面是訂單列表，可以看到每張訂單的金額和付款狀態。
+
+整個頁面只用了 html/template 和一個很短的 CSS 檔，沒有任何前端框架。對後台管理這種內部工具來說，這樣就已經很夠用了。
+-->
+
+---
+
+# GoShop 第 15 步：解題提示
+### 路由：Go 1.22 的 ServeMux 樣式
+
+```go
+// goshop/internal/web/server.go
+//go:embed templates static
+var assets embed.FS
+
+// 啟動時就解析模板；模板有語法錯誤時程式會直接 panic
+var tmpl = template.Must(template.ParseFS(assets, "templates/*.html"))
+
+// Server 保存處理請求時需要的相依物件。
+type Server struct {
+	Store    store.Store
+	Checkout *checkout.Service
+}
+
+// Handler 設定所有路由，傳回加上日誌中介軟體的 http.Handler。
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/products", s.listProducts)
+	mux.HandleFunc("GET /api/products/{sku}", s.getProduct)
+	mux.HandleFunc("POST /api/orders", s.createOrder)
+	// ...
+	return logging(mux)
+}
+```
+
+<!--
+web 套件的 Server 結構保存處理請求需要的東西：Store 和結帳服務。處理器都寫成 Server 的方法，就能直接使用這些欄位，不需要全域變數。
+
+路由用 Go 1.22 的新樣式：方法加路徑，路徑裡的 {sku} 是路徑參數，在處理器裡用 r.PathValue("sku") 取出。方法不符合的時候，ServeMux 會自動回 405。
+
+templates 和 static 兩個資料夾用 go:embed 嵌入成一個 embed.FS。模板在程式啟動時就用 template.Must 解析好，寫錯的話程式一啟動就會 panic，而不是等到有人打開網頁才發現。
+
+最後把整個 mux 包上本章寫過的 logging 中介軟體。
+-->
+
+---
+
+# GoShop 第 15 步：解題提示（續）
+### 依錯誤種類決定狀態碼
+
+```go
+// goshop/internal/web/api.go
+// writeErr 依錯誤種類決定 HTTP 狀態碼。
+func writeErr(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, shop.ErrNotFound):
+		writeError(w, http.StatusNotFound, err.Error())
+	case errors.Is(err, shop.ErrOutOfStock), errors.Is(err, shop.ErrPaid):
+		writeError(w, http.StatusConflict, err.Error())
+	case errors.Is(err, shop.ErrEmptyCart), errors.Is(err, shop.ErrCoupon),
+		errors.Is(err, payment.ErrInsufficientFunds):
+		writeError(w, http.StatusBadRequest, err.Error())
+	default:
+		slog.Error("內部錯誤", "err", err) // 細節只寫進日誌，不回給客戶端
+		writeError(w, http.StatusInternalServerError, "伺服器發生錯誤")
+	}
+}
+```
+
+- 第 6 章設計的哨兵錯誤，在這裡決定了 API 的狀態碼
+
+<!--
+writeErr 是整個 API 錯誤處理的核心。它用 errors.Is 判斷錯誤的種類，決定要回哪一個狀態碼。
+
+這裡就看得出第 6 章設計哨兵錯誤的價值了：store 和 checkout 完全不知道 HTTP 的存在，它們只傳回 ErrNotFound、ErrOutOfStock 這些錯誤；web 套件再把這些錯誤翻譯成 HTTP 的語言。各層各司其職。
+
+default 的情況是我們沒預料到的錯誤，例如資料庫斷線。這時候詳細的錯誤只寫進日誌，回給客戶端的只有「伺服器發生錯誤」，避免把內部資訊洩漏出去。
+-->
+
+---
+
+# GoShop 第 15 步：解題提示（續 2）
+### 處理器：解碼 JSON、回傳 201
+
+```go
+// goshop/internal/web/api.go
+func (s *Server) createOrder(w http.ResponseWriter, r *http.Request) {
+	var cart checkout.Cart
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)) // 最多 1 MB
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&cart); err != nil {
+		writeError(w, http.StatusBadRequest, "JSON 格式錯誤："+err.Error())
+		return
+	}
+	o, err := s.Checkout.Checkout(r.Context(), cart)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.Header().Set("Location", "/api/orders/"+strconv.Itoa(o.ID))
+	writeJSON(w, http.StatusCreated, o)
+}
+```
+
+- `checkout.Item`、`checkout.Cart` 加上 JSON 標籤，就能直接當成請求的格式
+- `r.Context()`：客戶端斷線時會被取消，資料庫查詢也跟著停止
+
+<!--
+createOrder 把請求的 JSON 直接解碼成第 8 章的 checkout.Cart，只要替 Cart 和 Item 加上 JSON 標籤就行了。
+
+MaxBytesReader 限制請求最多 1 MB，避免有人送一個超大的請求把伺服器的記憶體吃光。DisallowUnknownFields 讓欄位名稱打錯的請求直接得到 400，前端工程師很快就能發現問題。
+
+結帳時傳入 r.Context()，這是每個請求自帶的 context。客戶端斷線的時候它會被取消，第 13 章 MySQL 的查詢也會跟著停止，不會浪費資料庫的資源。
+
+成功之後先設定 Location 標頭，再用 writeJSON 回傳 201 和訂單內容。
+-->
+
+---
+
+# GoShop 第 15 步：解題提示（續 3）
+### 後台模板與表單
+
+```html
+<!-- goshop/internal/web/templates/admin.html -->
+    {{range .Products}}
+    <tr class="{{if lt .Stock 5}}low{{end}}">
+      <td>{{.SKU}}</td><td>{{.Name}}</td><td>{{.Price}}</td><td>{{.Stock}}</td>
+    </tr>
+    {{end}}
+```
+
+```go
+// goshop/internal/web/admin.go
+	if err := s.Store.SaveProduct(r.Context(), p); err != nil {
+		s.renderAdmin(w, r, http.StatusInternalServerError, "儲存失敗")
+		return
+	}
+	// 成功後重新導向（PRG 模式），重新整理頁面才不會重複送出表單
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+}
+```
+
+- `{{.Price}}` 會呼叫 `Money.String()`，網頁上直接顯示 `NT$1,280`
+
+<!--
+模板用 range 走訪商品，用 if lt .Stock 5 判斷庫存是不是少於 5 件，是的話加上 low 這個 CSS class，讓整列變成紅字。
+
+{{.Price}} 印出來是 NT$1,280，因為 html/template 也會呼叫 Stringer。第 7 章寫的 String 方法，在網頁上也派上用場了。
+
+表單處理完成後，用 303 See Other 重新導向回後台首頁，這叫做 PRG 模式：Post、Redirect、Get。如果直接回傳網頁，使用者按重新整理，瀏覽器會問要不要重新送出表單，一不小心就重複新增了。
+-->
+
+---
+
+# GoShop 第 15 步：解題提示（續 4）
+### 啟動伺服器與優雅關閉
+
+```go
+// goshop/main.go
+	app := &web.Server{Store: st, Checkout: newService(st)}
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           app.Handler(),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	errCh := make(chan error, 1)
+	go func() { errCh <- srv.ListenAndServe() }()
+	slog.Info("伺服器啟動", "addr", addr)
+
+	select {
+	case err := <-errCh: // 例如連接埠已被佔用
+		return err
+	case <-ctx.Done():
+	}
+	slog.Info("收到結束訊號，關閉伺服器中…")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return srv.Shutdown(shutdownCtx) // 等進行中的請求處理完才關閉
+```
+
+<!--
+最後是啟動伺服器。這段和本章「組合路由並啟動伺服器」的寫法一樣：用 signal.NotifyContext 等待 Ctrl+C，在另一個 goroutine 裡執行 ListenAndServe，收到訊號後呼叫 Shutdown，等進行中的請求都處理完才關閉。
+
+這裡多了一個 errCh 通道：如果連接埠已經被佔用，ListenAndServe 會馬上失敗，我們要把這個錯誤傳回來，而不是傻傻地等 Ctrl+C。select 同時等待兩件事，哪個先發生就處理哪個。goroutine、通道和 select 是下一章的主題。
+
+serve 結束後，回到 run 函式，記憶體版本會把資料存成快照，所以伺服器重新啟動後資料都還在。
+-->
+
+---
 
 # 章節總結
 
@@ -1526,6 +1791,7 @@ mux.HandleFunc("DELETE /api/todos/{id}", api.removeTodo)
 - **網頁**：`html/template` 自動跳脫防 XSS；`http.FileServer` + `StripPrefix`；`//go:embed` 打包靜態資源
 - **RESTful API**：資源用網址、動作用方法；`writeJSON` / `writeError`；中介軟體記錄日誌
 - **正式環境**：`http.Server` 設定逾時；`signal.NotifyContext` + `srv.Shutdown` 優雅關閉；`httptest` 寫測試
+- **GoShop**：`web` 套件提供商品與訂單的 RESTful JSON API、`html/template` 後台網頁與表單；`embed` 打包模板和 CSS；優雅關閉
 
 下一章我們會介紹「並行性運算」：goroutine、通道與 context。
 
@@ -1533,6 +1799,8 @@ mux.HandleFunc("DELETE /api/todos/{id}", api.removeTodo)
 我們來整理今天學到的東西。
 
 HTTP 伺服器的核心是處理器和路由。Go 1.22 之後的 ServeMux 支援方法和路徑參數，大部分的專案不需要第三方框架。產生網頁用 html/template，它會自動防止 XSS；提供靜態檔案用 FileServer，搭配 embed 可以打包成單一執行檔。RESTful API 用網址表示資源、用方法表示動作，搭配 JSON 交換資料。正式環境記得設定逾時和優雅關閉。
+
+GoShop 這一步變成了一個網站：前台可以用 JSON API 查商品、下單、付款；店長可以在後台網頁看庫存和訂單、用表單新增商品。錯誤依照種類對應到 404、409、400 等狀態碼；模板和 CSS 用 embed 編譯進執行檔，部署時只要一個檔案。
 
 今天我們好幾次提到「每個請求都在自己的 goroutine 裡執行」、「多個請求同時修改資料要用互斥鎖」。下一章就要正式學習 Go 最有特色的功能：並行性運算。goroutine、通道、互斥鎖、context，這些是 Go 被稱為「雲端時代的語言」的關鍵。
 -->

@@ -61,6 +61,7 @@ layout: default
 - **通道 (channel)** — 傳遞訊息、`select` 多重來源
 - **並行性運算的流程控制** — 緩衝區與關閉、等待結束、取消信號、產生器、方向限制、結構方法
 - **context 套件** — 逾時與取消
+- **GoShop 專案實作** — 第 16 步：防止超賣與背景通知
 - **章節總結**
 
 <!--
@@ -1390,6 +1391,236 @@ A 在 50 毫秒、B 在 100 毫秒回應，C 要 300 毫秒，超過 150 毫秒�
 -->
 
 ---
+layout: section
+class: flex flex-col justify-center items-center text-center
+---
+
+# GoShop 專案實作
+## 第 16 步：防止超賣與背景通知
+
+<!--
+回到 GoShop。上一章 GoShop 變成了網站，而 HTTP 伺服器會用一個 goroutine 處理一個請求。
+
+也就是說，當 100 位顧客同時搶購限量商品，會有 100 個 goroutine 同時讀寫我們的記憶體儲存庫。這會發生什麼事？今天我們就用 -race 來檢查看看。
+-->
+
+---
+
+# GoShop 第 16 步：防止超賣與背景通知
+### 任務說明
+
+1. 寫一個測試：**100 個 goroutine 同時購買只剩 10 件的商品**，用 `go test -race` 執行
+2. 用 `sync.RWMutex` 保護 `Memory`：讀取用 `RLock`，寫入用 `Lock`
+3. 測試必須證明：剛好 10 人成功、90 人收到 `ErrOutOfStock`、庫存剛好歸零
+4. `webhook.Notifier`：用**有緩衝的通道**當佇列、4 個 worker 在背景送出通知
+   - `Notify` 不可以讓呼叫端等待；佇列滿了就放棄這次通知
+   - `Close` 關閉通道，等 worker 把佇列中的事件送完
+5. `checkout.Service` 加上 `OnPaid func(shop.Order)`，付款成功後呼叫
+
+```text
+$ go test -race ./internal/store      ← 修正前
+WARNING: DATA RACE
+Read at 0x00c0001649f0 by goroutine 13:
+  goshop/internal/store.(*Memory).Product() … memory.go:41
+```
+
+<!--
+第一件事是證明問題存在。我們寫一個測試，讓 100 個 goroutine 同時下單，每人買 1 件，而商品只有 10 件。用 -race 旗標執行，Go 的資料競爭偵測器馬上就會報警。
+
+就算沒有 -race，這個測試也可能失敗：兩個 goroutine 同時讀到「還剩 1 件」，兩個都判斷庫存足夠，結果賣出了 11 件。這就是電商最怕的「超賣」。
+
+第二件事是通知。上一章的 webhook 是同步送出的，倉庫系統如果要 3 秒才回應，顧客付款就要等 3 秒。今天我們把它改成背景處理。
+-->
+
+---
+
+# GoShop 第 16 步：解題提示
+### 讀寫鎖：RLock 與 Lock
+
+```go
+// goshop/internal/store/memory.go
+// Memory 把資料存在記憶體中，可以搭配 Save／Load 存成 gob 快照。
+// 所有方法都可以被多個 goroutine 同時呼叫。
+type Memory struct {
+	mu       sync.RWMutex // 保護下面三個欄位
+	products map[string]shop.Product
+	orders   map[int]shop.Order
+	lastID   int
+}
+
+// ...
+// Product 用 SKU 查詢一項商品。
+func (m *Memory) Product(ctx context.Context, sku string) (shop.Product, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.product(sku)
+}
+
+// product 是不加鎖的版本，呼叫端必須已經持有鎖。
+func (m *Memory) product(sku string) (shop.Product, error) {
+```
+
+<!--
+在 Memory 加上一個 sync.RWMutex，習慣上放在它要保護的欄位上面，並且用註解說明它保護哪些欄位。
+
+RWMutex 是讀寫鎖：查詢商品這種只讀的操作用 RLock，多個 goroutine 可以同時讀；新增商品、下單這種會寫入的操作用 Lock，同一時間只能有一個 goroutine，而且會等所有讀取的人都離開。電商的讀取遠比寫入多，所以讀寫鎖比一般的 Mutex 更有效率。
+
+注意 Product 分成兩個版本：大寫的 Product 會加鎖，給外面呼叫；小寫的 product 不加鎖，給已經持有鎖的方法在內部使用。為什麼要這樣？下一頁說明。
+-->
+
+---
+
+# GoShop 第 16 步：解題提示（續）
+### 檢查與扣庫存必須在同一把鎖裡
+
+```go
+// goshop/internal/store/memory.go
+// PlaceOrder 檢查並扣除庫存，替訂單編號後存起來。
+func (m *Memory) PlaceOrder(ctx context.Context, o *shop.Order) error {
+	m.mu.Lock() // 「檢查庫存」到「扣庫存」必須在同一把鎖裡完成
+	defer m.mu.Unlock()
+
+	var errs []error
+	for _, l := range o.Lines {
+		p, err := m.product(l.SKU) // 不能呼叫 m.Product：鎖不能重複取得
+		// ...
+	}
+	// ...
+	for _, l := range o.Lines { // 全部檢查通過才扣庫存
+		p := m.products[l.SKU]
+		p.Stock -= l.Qty
+		m.products[l.SKU] = p
+	}
+```
+
+- Go 的鎖**不可重入**：已經持有 `Lock`，再呼叫會 `RLock` 的方法就會**死結**
+
+<!--
+PlaceOrder 一開始就取得寫入鎖，一直到函式結束才釋放。這樣「檢查庫存」和「扣庫存」之間，不會有其他 goroutine 插隊，就不會超賣。第 13 章 MySQL 版本用 stock >= ? 的條件達到同樣的效果，這裡是用鎖。
+
+特別注意迴圈裡呼叫的是小寫的 product。如果呼叫大寫的 Product，它會再去取 RLock，但寫入鎖還在我們自己手上，RLock 會一直等我們釋放，而我們在等 Product 回傳，兩邊互相等待，程式就卡死了。這叫做死結。
+
+Go 的鎖不可重入，同一個 goroutine 也不能重複取得。這是今天「使用互斥鎖的注意事項」的真實案例。
+-->
+
+---
+
+# GoShop 第 16 步：解題提示（續 2）
+### 100 人搶 10 件：並行測試
+
+```go
+// goshop/internal/store/store_test.go
+	var ok, soldOut atomic.Int64
+	var wg sync.WaitGroup
+	for range 100 {
+		wg.Go(func() {
+			o := shop.Order{Lines: []shop.Line{{SKU: "HOT", Name: "限量款", Qty: 1}}}
+			err := st.PlaceOrder(ctx, &o)
+			switch {
+			case err == nil:
+				ok.Add(1)
+			case errors.Is(err, shop.ErrOutOfStock):
+				soldOut.Add(1)
+			default:
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+```
+
+```text
+$ GOSHOP_TEST_DSN=… go test -race -run 'TestMemory|TestMySQL' ./internal/store
+ok      goshop/internal/store   1.128s
+```
+
+<!--
+這個測試用 Go 1.25 的 wg.Go 啟動 100 個 goroutine，每個都買 1 件限量款。成功和售完的人數用 atomic.Int64 計算，因為 100 個 goroutine 會同時加這兩個計數器，用一般的 int 又會發生資料競爭。
+
+wg.Wait 等全部結束之後，檢查成功 10 人、售完 90 人、庫存剛好是 0。
+
+最棒的是，這個測試放在第 13 章的合約測試 testStore 裡面，所以記憶體版和 MySQL 版都要通過。MySQL 版不需要鎖，靠的是交易和 stock >= ? 的條件，一樣通過了。
+-->
+
+---
+
+# GoShop 第 16 步：解題提示（續 3）
+### 背景 worker pool
+
+```go
+// goshop/internal/webhook/notifier.go
+// NewNotifier 啟動 workers 個 goroutine，從佇列取出事件送到 url。
+func NewNotifier(url string, workers int) *Notifier {
+	n := &Notifier{
+		url:    url,
+		client: &http.Client{Timeout: 5 * time.Second},
+		jobs:   make(chan Event, 100), // 有緩衝的通道就是一個佇列
+	}
+	for id := range workers {
+		n.wg.Go(func() { n.worker(id) })
+	}
+	return n
+}
+
+func (n *Notifier) worker(id int) {
+	for e := range n.jobs { // 通道被關閉、而且取完之後，迴圈才會結束
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		err := Send(ctx, n.client, n.url, e)
+		cancel()
+		// ...
+```
+
+<!--
+Notifier 就是今天學的工作池。jobs 是一個容量 100 的有緩衝通道，當作待送通知的佇列。
+
+NewNotifier 啟動 4 個 worker goroutine，每個 worker 都用 for range 從通道取出事件，送出 webhook。for range 通道會一直等下去，直到通道被關閉而且裡面的事件都取完，迴圈才會結束，worker 也就結束了。
+
+每次送出都用 context.WithTimeout 設定 10 秒的上限，送完馬上呼叫 cancel 釋放資源。這裡不能用 defer，因為 worker 是一個長時間執行的迴圈，defer 要等整個函式結束才會執行。
+-->
+
+---
+
+# GoShop 第 16 步：解題提示（續 4）
+### 不讓呼叫端等待：select + default
+
+```go
+// goshop/internal/webhook/notifier.go
+// Notify 把事件放進佇列；佇列滿了就放棄，絕不讓呼叫端卡住。
+func (n *Notifier) Notify(e Event) bool {
+	select {
+	case n.jobs <- e:
+		return true
+	default:
+		slog.Warn("通知佇列已滿，放棄這次通知", "type", e.Type)
+		return false
+	}
+}
+
+// Close 停止接收新事件，並等待佇列中剩下的事件都送完。
+func (n *Notifier) Close() {
+	close(n.jobs)
+	n.wg.Wait()
+}
+```
+
+```go
+// goshop/main.go
+		svc.OnPaid = func(o shop.Order) {
+			n.Notify(webhook.Event{Type: "order.paid", Data: o})
+		}
+```
+
+<!--
+Notify 用 select 加上 default：通道還有空間就放進去；通道滿了，default 會馬上執行，放棄這次通知並記錄警告。這樣不管倉庫系統有多慢，顧客付款都不會被卡住。
+
+Close 先關閉通道，告訴 worker「不會再有新的事件了」，再用 WaitGroup 等所有 worker 把剩下的事件送完。伺服器優雅關閉的時候呼叫它，就不會漏掉已經放進佇列的通知。
+
+main 用一個閉包設定 OnPaid：付款成功就把訂單丟進佇列。checkout 套件完全不知道 webhook 的存在，它只知道「付款後要呼叫 OnPaid」。
+
+實測：50 個人同時搶只剩 5 件的手沖壺，剛好 5 人成功、45 人收到 409，倉庫也剛好收到 5 個通知。
+-->
+
+---
 
 # 章節總結
 
@@ -1399,6 +1630,7 @@ A 在 50 毫秒、B 在 100 毫秒回應，C 要 300 毫秒，超過 150 毫秒�
 - **通道**：`ch <- v` 送出、`<-ch` 接收；無緩衝通道同步兩端；`select` 等待多個通道，`time.After` 做逾時
 - **流程控制**：由**送出方關閉**通道；`for range ch` 收到關閉為止；關閉通道 = **廣播**；產生器、管線、工作池；單向通道 `chan<-` / `<-chan`
 - **context**：`WithTimeout` / `WithCancel` + **`defer cancel()`**；`ctx.Done()` 是取消時被關閉的通道；當第一個參數一路往下傳
+- **GoShop**：`-race` 抓出記憶體版本的資料競爭，用 `sync.RWMutex` 修正；100 人搶 10 件的並行測試；通道 + worker pool 在背景送出 webhook
 
 下一章我們會介紹「Go 語言工具」：`go build`、跨平台編譯、`gofmt`、`go vet`、`go doc`。
 
@@ -1408,6 +1640,8 @@ A 在 50 毫秒、B 在 100 毫秒回應，C 要 300 毫秒，超過 150 毫秒�
 goroutine 是 Go 的輕量執行緒，用 go 關鍵字啟動，用 WaitGroup 等待它們完成。多個 goroutine 存取同一個變數時會有資料競爭，用 -race 偵測，用 atomic 或 Mutex 保護。通道是 goroutine 之間溝通的管道，select 可以同時等待多個通道。關閉通道是一種廣播，這是取消信號和 context 的原理。context 在整條呼叫鏈中傳遞逾時和取消。
 
 並行性運算是 Go 最強大的武器，但也最容易寫出難以除錯的 bug，所以一定要養成用 -race 測試的習慣。
+
+GoShop 這一步解決了網站最真實的問題：很多人同時下單。go test -race 抓出上一章的資料競爭，我們用 RWMutex 保護記憶體版本，再用「100 人搶 10 件」的測試證明不會超賣；webhook 通知則交給背景的 worker pool，顧客不用等倉庫系統回應。
 
 下一章會比較輕鬆，我們要認識 Go 的工具鏈：怎麼編譯出給 Windows、macOS、Linux 用的執行檔，怎麼格式化程式碼、做靜態分析、查詢文件。這些工具是 Go 開發體驗這麼好的原因。
 -->

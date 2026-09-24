@@ -59,6 +59,7 @@ layout: default
 - **使用套件** — 套件的命名、宣告、匯出規則
 - **管理套件** — `GOROOT`、`GOPATH`、Go Modules、下載第三方模組
 - **套件的呼叫與執行** — 套件別名、`init()` 函式、`internal` 目錄
+- **GoShop 專案實作** — 第 8 步：把 GoShop 拆成多個套件
 - **章節總結**
 
 <!--
@@ -815,6 +816,232 @@ main.go 用別名 o 匯入 order 套件，所以呼叫時寫 o.New。
 -->
 
 ---
+layout: section
+class: flex flex-col justify-center items-center text-center
+---
+
+# GoShop 專案實作
+## 第 8 步：拆成多個套件
+
+<!--
+回到 GoShop。經過七章的累積，main.go 已經快 300 行了：金額、商品、購物車、折扣、錯誤、訂單、付款，全部擠在同一個檔案裡。
+
+找一個函式要捲很久，改一個地方還要擔心會不會影響到別的東西。這就是今天學套件的最好時機。
+-->
+
+---
+
+# GoShop 第 8 步：拆成多個套件
+### 任務說明
+
+依照「**一個套件只負責一件事**」的原則，把程式碼搬到 `internal/` 底下：
+
+| 套件 | 負責的事 | 主要內容 |
+| --- | --- | --- |
+| `money` | 金額 | `Money`、`String()`、`Times()` |
+| `shop` | 核心資料與錯誤 | `Product`、`Order`、`Status`、`ErrNotFound`、`StockError` |
+| `store` | 保存資料 | `Memory`：商品、訂單、檢查並扣庫存 |
+| `checkout` | 結帳流程 | `Cart`、`Discount`、`Service.Checkout`、`Service.Pay` |
+| `payment` | 付款方式 | `Method` 介面、`CreditCard`、`Wallet`、`CashOnDelivery` |
+
+- 訂單加上狀態 `Status`（`Pending`／`Paid`，用 `iota`），付款失敗時訂單保留為**待付款**
+- `main.go` 只負責建立物件、把它們組起來
+
+<!--
+這是拆分的規劃。五個套件各自負責一件事，名稱都很短，而且是單數名詞，這是 Go 的套件命名慣例。
+
+放在 internal 資料夾底下，代表這些套件只給 goshop 自己用，別的模組不能 import。這是今天補充介紹的 internal 目錄。
+
+趁著重構，我們也順便調整了一點設計：訂單多了一個狀態欄位，結帳和付款拆成兩個步驟。這樣付款失敗的時候，訂單還在，只是狀態是「待付款」，顧客之後可以換一種方式再付一次，這也比較接近真實的電商。
+-->
+
+---
+
+# GoShop 第 8 步：專案結構與相依關係
+
+```text
+goshop/
+├── go.mod                  module goshop
+├── main.go                 package main：組裝、執行
+└── internal/
+    ├── money/money.go      package money
+    ├── shop/shop.go        package shop      → money
+    ├── store/memory.go     package store     → shop
+    ├── checkout/           package checkout  → shop、store、payment
+    │   ├── cart.go
+    │   ├── discount.go
+    │   └── checkout.go
+    └── payment/payment.go  package payment   → money
+```
+
+- 箭頭是 import 的方向；Go **不允許套件互相 import**（循環相依）
+- 同一個資料夾的檔案屬於同一個套件，可以直接使用彼此**未匯出**的名稱
+
+<!--
+這是拆完之後的樣子。右邊的箭頭表示這個套件 import 了誰。
+
+大家看一下方向：money 最底層，誰都可以用它；shop 用 money；store 用 shop；checkout 在最上面，用到 shop、store、payment。整個相依關係是一個由上往下的樹，沒有繞圈圈。
+
+這很重要，因為 Go 不允許循環相依：如果 shop import 了 store，store 又 import shop，編譯就會失敗。規劃套件的時候，先想清楚誰依賴誰，就不會踩到這個坑。
+
+checkout 套件有三個檔案，它們的第一行都是 package checkout，屬於同一個套件。
+-->
+
+---
+
+# GoShop 第 8 步：解題提示
+### 匯出的名稱：大寫開頭
+
+```go
+// goshop/internal/money/money.go
+// Package money 處理新台幣金額。
+package money
+
+import "strconv"
+
+// Money 是新台幣金額，單位是「元」。
+type Money int
+
+// Times 傳回單價乘上數量的金額。
+func (m Money) Times(qty int) Money {
+	return m * Money(qty)
+}
+```
+
+```go
+// goshop/internal/shop/shop.go
+// Product 是一項商品。
+type Product struct {
+	SKU   string
+	Name  string
+	Price money.Money
+	Stock int
+}
+```
+
+<!--
+先看最底層的 money 套件。第一行的註解以「Package money」開頭，這是套件的說明文件，第 17 章的 go doc 會讀取它。
+
+Money、Times、String 都是大寫開頭，所以其他套件可以使用。
+
+在 shop 套件裡，就要寫 money.Money 來使用它，也就是「套件名稱.名稱」。Product 的欄位也全部大寫開頭，其他套件才能讀寫這些欄位。
+-->
+
+---
+
+# GoShop 第 8 步：解題提示（續）
+### store：保存商品與訂單
+
+```go
+// goshop/internal/store/memory.go
+// Memory 把資料存在記憶體中，程式結束就會消失。
+type Memory struct {
+	products map[string]shop.Product
+	orders   map[int]shop.Order
+	lastID   int
+}
+
+// NewMemory 建立一個記憶體儲存庫，並放入初始商品。
+func NewMemory(products ...shop.Product) *Memory {
+	m := &Memory{
+		products: make(map[string]shop.Product),
+		orders:   make(map[int]shop.Order),
+	}
+	for _, p := range products {
+		m.products[p.SKU] = p
+	}
+	return m
+}
+```
+
+- 欄位都是**小寫**：外部只能透過 `Product()`、`PlaceOrder()` 等方法存取
+
+<!--
+store 套件的 Memory 結構，欄位都是小寫開頭，其他套件看不到，只能透過它提供的方法操作。這就是封裝：資料要怎麼存是 store 自己的事，別人不需要知道，也不能亂改。
+
+建立 Memory 要用 NewMemory 這個函式，它會把 map 初始化好。如果讓外面直接寫 store.Memory{}，map 會是 nil，寫入的時候就會 panic。提供 New 開頭的建構函式，是 Go 很常見的慣例。
+
+PlaceOrder 的內容就是第 6 章的 validate 加上扣庫存，這裡就不重複列出了。
+-->
+
+---
+
+# GoShop 第 8 步：解題提示（續 2）
+### checkout：使用其他套件
+
+```go
+// goshop/internal/checkout/checkout.go
+import (
+	"errors"
+	"fmt"
+
+	"goshop/internal/payment"
+	"goshop/internal/shop"
+	"goshop/internal/store"
+)
+
+// Service 負責結帳與付款流程。
+type Service struct {
+	Store *store.Memory
+	Rules []Discount
+}
+```
+
+- 自己模組的套件用「模組名稱 + 路徑」import：`goshop/internal/store`
+- 標準函式庫和自己的套件之間空一行，是 `goimports` 的排版慣例
+
+<!--
+checkout 套件的 import 區塊，上面是標準函式庫，下面是我們自己的套件。自己的套件路徑是 go.mod 裡的模組名稱 goshop，加上資料夾路徑。
+
+Service 把結帳需要的東西都放在欄位裡：用哪個 Store、有哪些折扣規則。Checkout 和 Pay 就是它的兩個方法。
+
+這裡的 Store 欄位型別是 *store.Memory，也就是寫死了一定要用記憶體版本。第 13 章換成 MySQL 的時候，我們會把它改成介面，到時候就會看到介面的好處。
+-->
+
+---
+
+# GoShop 第 8 步：解題提示（續 3）
+### main：把零件組起來
+
+```go
+// goshop/main.go
+	svc := &checkout.Service{
+		Store: st,
+		Rules: []checkout.Discount{
+			checkout.PercentOff(10), checkout.Threshold(2000, 300)},
+	}
+	wallet := &payment.Wallet{Balance: 1000}
+
+	var cart checkout.Cart
+	cart.Add(checkout.Item{SKU: "SKU-001", Qty: 2},
+		checkout.Item{SKU: "SKU-003", Qty: 1})
+
+	o, err := svc.Checkout(cart)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	if err := svc.Pay(o.ID, wallet); err != nil {
+		fmt.Println(err) // 錢包餘額不足，訂單保留為待付款
+	}
+```
+
+```text
+訂單 #1 付款失敗：GoShop 錢包：餘額不足，只剩 NT$1,000
+===== 訂單 #1（已付款）=====   ← 之後改用貨到付款成功
+```
+
+<!--
+main 現在只做「組裝」的工作：建立 store、建立結帳服務、建立錢包，然後呼叫它們。
+
+因為 main 在不同的套件，所有東西前面都要加上套件名稱，例如 checkout.Item、payment.Wallet。從別的套件使用結構的時候，Go 建議寫出欄位名稱，所以這裡寫 SKU: "SKU-001"，而不是只寫值。
+
+執行後，錢包 1000 元不夠付 1880 元，訂單保留為待付款；接著改用貨到付款，訂單就變成已付款了。
+
+最後提醒大家，執行多套件的專案要用 go run 點，而不是 go run main.go，這樣 Go 才會編譯整個模組。
+-->
+
+---
 
 # 章節總結
 
@@ -825,6 +1052,7 @@ main.go 用別名 o 匯入 order 套件，所以呼叫時寫 o.New。
 - **Go Modules**：`go.mod` + `go.sum` 都要 commit；常用 `go get`、`go mod tidy`
 - **import**：別名解決衝突；`_` 空白匯入只執行 `init()`；避免 `.` 點匯入
 - **init()**：在 `main()` 前自動執行；只做一定會成功的簡單工作；`internal/` 限制模組外匯入
+- **GoShop**：把 300 行的 `main.go` 拆成 `money`、`shop`、`store`、`checkout`、`payment` 五個 `internal` 套件
 
 下一章我們會介紹「程式除錯」：格式化輸出、日誌與單元測試。
 
@@ -832,6 +1060,8 @@ main.go 用別名 o 匯入 order 套件，所以呼叫時寫 o.New。
 我們來整理今天學到的東西。
 
 套件是 Go 組織程式碼的基本單位，一個資料夾就是一個套件。大寫開頭匯出、小寫開頭私有，這是 Go 最重要的封裝規則。Go Modules 是現代的套件管理方式，go.mod 和 go.sum 都要 commit，最常用的指令是 go mod tidy。
+
+GoShop 在這一步完成了第一次大重構：300 行的 main.go 拆成五個 internal 套件，每個套件只負責一件事，main 只剩下「把零件組起來」的工作。之後每一章加功能，都只要動到相關的那一兩個套件。
 
 到這裡，我們已經學完了 Go 語言的基礎，也知道怎麼組織一個專案。接下來的章節要進入實戰：下一章先學怎麼除錯，包括用 fmt 做格式化輸出、用 log 和 slog 記錄日誌，以及用 testing 套件寫單元測試，確保程式的正確性。
 -->

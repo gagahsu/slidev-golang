@@ -61,6 +61,7 @@ layout: default
 - **以函式為型別** — 自訂函式型別、當參數、當回傳值
 - **補充：泛型與迭代器** — Go 1.18+ 泛型、Go 1.23+ `range` 函式
 - **defer** — 延後執行、執行順序、變數值的副作用
+- **GoShop 專案實作** — 第 5 步：折扣規則、千分位金額與收據
 - **章節總結**
 
 <!--
@@ -1150,6 +1151,159 @@ hello 可以直接傳給 withUpper，因為它的簽章跟 Handler 一樣，Go �
 -->
 
 ---
+layout: section
+class: flex flex-col justify-center items-center text-center
+---
+
+# GoShop 專案實作
+## 第 5 步：折扣規則與收據
+
+<!--
+回到 GoShop。電商最常變動的就是折扣活動：這個月全館 9 折、下個月滿 2000 折 300、週年慶兩種活動一起上，看哪個划算用哪個。
+
+如果每次活動都要改一堆 if-else，程式很快就會變得一團亂。今天學的「函式也是一種值」，剛好可以把每一種折扣規則變成一個函式。
+-->
+
+---
+
+# GoShop 第 5 步：折扣規則與收據
+### 任務說明
+
+1. 自訂函式型別 `type Discount func(subtotal int) int`（傳回可以折抵的金額）
+2. 用**閉包**寫兩個「規則工廠」：`PercentOff(p int)`、`Threshold(limit, off int)`
+3. `Best(subtotal int, rules ...Discount) int`：從多個規則中挑折最多的
+4. `formatNT(n int) string`：把 `2580` 轉成 `NT$2,580`
+5. `Cart.Add` 改成**參數不定**，可以一次放入多個品項；收據結尾用 **`defer`** 印出
+
+```text
+========== GoShop 收據 ==========
+衣索比亞咖啡豆 x 2	NT$900
+手沖壺 x 1	NT$1,280
+馬克杯 x 2	NT$700
+小計： NT$2,880
+折扣： NT$300
+應付： NT$2,580
+=========== 謝謝光臨 ===========
+```
+
+<!--
+這一步的核心是 Discount 這個函式型別：輸入小計，傳回可以折多少錢。
+
+PercentOff(10) 會傳回一個「折 10%」的函式，Threshold(2000, 300) 會傳回一個「滿 2000 折 300」的函式。它們是會產生函式的函式，而產生出來的函式記住了 p、limit、off 這些參數，這就是閉包。
+
+週年慶的規則是兩種活動取優惠較多的一個。小計 2880 元，9 折可以折 288 元，滿額可以折 300 元，所以 Best 會選 300 元。
+-->
+
+---
+
+# GoShop 第 5 步：解題提示
+### 閉包：會產生折扣規則的函式
+
+```go
+// goshop/main.go
+// Discount 傳入小計，傳回可以折抵的金額
+type Discount func(subtotal int) int
+
+// PercentOff 建立「打 p 折扣」的折扣規則，例如 10 代表 9 折
+func PercentOff(p int) Discount {
+	return func(subtotal int) int {
+		return subtotal * p / 100
+	}
+}
+
+// Threshold 建立「滿 limit 元折 off 元」的折扣規則
+func Threshold(limit, off int) Discount {
+	return func(subtotal int) int {
+		if subtotal >= limit {
+			return off
+		}
+		return 0
+	}
+}
+```
+
+<!--
+PercentOff 傳回一個匿名函式，這個匿名函式用到了外層的參數 p。就算 PercentOff 已經執行結束，傳回的函式還是記得 p 是多少，這就是閉包。
+
+Threshold 也是一樣的道理，它記住了門檻 limit 和折抵金額 off。
+
+有了這兩個工廠，要新增活動就只是呼叫一下，例如 PercentOff(15) 就是 85 折，完全不用修改結帳的程式。
+-->
+
+---
+
+# GoShop 第 5 步：解題提示（續）
+### 參數不定函式與 defer
+
+```go
+// goshop/main.go
+// Best 從多個折扣規則中挑出折最多的那一個
+func Best(subtotal int, rules ...Discount) int {
+	best := 0
+	for _, rule := range rules {
+		best = max(best, rule(subtotal))
+	}
+	return best
+}
+
+// formatNT 把金額加上千分位，例如 12345 → NT$12,345
+func formatNT(n int) string {
+	s := strconv.Itoa(n)
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return "NT$" + s
+}
+```
+
+- 呼叫時用 `Best(subtotal, rules...)`，把切片**展開**成不定參數
+
+<!--
+Best 的參數 rules ...Discount 是參數不定的寫法，在函式裡面 rules 就是一個 []Discount 切片。走訪每一個規則，呼叫它算出折扣，用內建的 max 留下最大的那個。
+
+formatNT 是一個很實用的小工具。先把數字轉成字串，然後從右邊往左，每 3 位插入一個逗號。例如 12345，第一圈 i 是 2，切成 12 和 345，中間插逗號。
+
+呼叫參數不定函式的時候，如果手上已經有一個切片，就在後面加三個點把它展開。
+-->
+
+---
+
+# GoShop 第 5 步：解題提示（續 2）
+### 用 defer 印出收據結尾
+
+```go
+// goshop/main.go
+// printReceipt 印出收據，並傳回應付金額
+func printReceipt(cart Cart, catalog map[string]Product,
+	rules ...Discount) (total int) {
+	fmt.Println("========== GoShop 收據 ==========")
+	defer fmt.Println("=========== 謝謝光臨 ===========")
+
+	// ...
+	subtotal := cart.Total(catalog)
+	discount := Best(subtotal, rules...)
+	total = subtotal - discount
+	// ...
+	return total
+}
+```
+
+```go
+// goshop/main.go
+	// 週年慶：全館 9 折，或滿 2000 折 300，取優惠較多者
+	rules := []Discount{PercentOff(10), Threshold(2000, 300)}
+	total := printReceipt(cart, catalog, rules...)
+```
+
+<!--
+printReceipt 一開始印出收據的標題，緊接著用 defer 安排「謝謝光臨」這一行。defer 的意思是：不管函式從哪裡 return，結束之前一定會執行它。之後就算我們在中間加了提早 return 的判斷，收據的結尾也不會漏印。
+
+它的傳回值是具名的 total，這也是今天學過的寫法。
+
+main 裡面把兩個規則放進切片，再用 rules... 展開傳進去。執行結果就是上上頁的收據。
+-->
+
+---
 
 # 章節總結
 
@@ -1160,6 +1314,7 @@ hello 可以直接傳給 withUpper，因為它的簽章跟 Handler 一樣，Go �
 - **函式型別**：`type Op func(int, int) int`；函式可當參數、當回傳值
 - **泛型與迭代器**：`func F[T any]`（1.18+）；`iter.Seq` 可用於 `for range`（1.23+）
 - **defer**：函式結束時執行、LIFO 順序；參數立刻求值；可修改具名回傳值
+- **GoShop**：用閉包建立折扣規則，參數不定函式一次加入多個品項，`defer` 印出收據結尾
 
 下一章我們會介紹 Go 的「錯誤處理」：`error` 介面、`panic` 與 `recover`。
 
@@ -1167,6 +1322,8 @@ hello 可以直接傳給 withUpper，因為它的簽章跟 Handler 一樣，Go �
 我們來整理今天學到的東西。
 
 函式的部分，最重要的是多重回傳值和「結果加錯誤」的慣例。閉包讓函式可以帶著狀態走，函式型別讓我們可以把「做法」當成參數傳遞。defer 是 Go 處理收尾的標準方式，記得它是後進先出、參數立刻求值。
+
+GoShop 這一步把折扣規則變成了「函式」：PercentOff 和 Threshold 是會產生折扣函式的閉包工廠，Best 用參數不定參數接收任意多個規則，收據的結尾則交給 defer。
 
 今天我們已經多次看到 error 這個型別，也看到 errors.New、fmt.Errorf 和 %w。下一章會完整介紹 Go 的錯誤處理哲學：為什麼 Go 不用 try-catch？error 到底是什麼？什麼時候該用 panic？
 -->

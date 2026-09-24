@@ -58,6 +58,7 @@ layout: default
 - **介面** — 認識介面、定義、實作、隱性實作的優點
 - **鴨子定型和多型** — 會呱呱叫的就是鴨子；同一個呼叫、不同的行為
 - **在函式中活用介面** — 介面當參數、當回傳值、空介面、型別斷言與型別 switch
+- **GoShop 專案實作** — 第 7 步：`Money` 型別與付款方式介面
 - **章節總結**
 
 <!--
@@ -1108,6 +1109,191 @@ name 用型別 switch 判斷實際型別。因為 CreditCard 是用指標實作�
 -->
 
 ---
+layout: section
+class: flex flex-col justify-center items-center text-center
+---
+
+# GoShop 專案實作
+## 第 7 步：金額型別與付款方式
+
+<!--
+回到 GoShop。現在的程式有兩個小困擾。
+
+第一，金額到處都是 int，要印出 NT$1,280 的時候，每次都要記得呼叫 formatNT。第二，訂單成立之後還沒付款，而付款方式有好幾種：信用卡、GoShop 錢包、貨到付款，每一種的規則都不一樣。
+
+今天學的介面，剛好可以解決這兩個問題。
+-->
+
+---
+
+# GoShop 第 7 步：金額型別與付款方式
+### 任務說明
+
+1. 定義 `type Money int`，實作 `String()`，讓它滿足 **`fmt.Stringer`**；把所有金額欄位改成 `Money`
+2. 定義介面 `PaymentMethod`：`Name() string` 與 `Pay(amount Money) error`
+3. 實作三種付款方式，並在**編譯時期確認**都有實作介面：
+
+| 型別 | `Pay` 的規則 | 接收器 |
+| --- | --- | --- |
+| `CreditCard` | 超過信用額度 `Limit` 就拒絕 | 值 |
+| `Wallet` | 餘額不足回傳 `ErrInsufficientFunds`，成功要扣餘額 | **指標** |
+| `CashOnDelivery` | 一律成功 | 值 |
+
+4. `(o *Order) Pay(methods ...PaymentMethod) error`：依序嘗試，直到其中一種成功
+
+<!--
+第一件事是把金額從 int 換成自訂型別 Money。這樣做的好處是：只要 Money 有 String 方法，fmt.Println 印它的時候就會自動呼叫，再也不用手動 formatNT。
+
+第二件事是付款介面。三種付款方式的規則都不同，但對結帳流程來說，它只需要知道兩件事：這個付款方式叫什麼名字、付這筆錢會不會成功。這兩件事就是介面的兩個方法。
+
+特別注意 Wallet：付款成功要扣餘額，會修改自己的欄位，所以要用指標接收器。這是今天「使用介面的注意事項」的重點。
+-->
+
+---
+
+# GoShop 第 7 步：預期結果
+
+```text
+付款方式： GoShop 錢包（餘額 NT$1,000）
+付款方式： 信用卡 *4242（額度 NT$30,000）
+===== 訂單 #1 =====
+濾掛咖啡（10入） x 3	NT$840
+應付： NT$756 ／付款方式： GoShop 錢包
+===== 謝謝光臨 =====
+===== 訂單 #2 =====
+衣索比亞咖啡豆 x 2	NT$900
+手沖壺 x 1	NT$1,280
+應付： NT$1,880 ／付款方式： 信用卡 *4242
+===== 謝謝光臨 =====
+錢包餘額： NT$244
+```
+
+- 第 1 張訂單用錢包付款；第 2 張訂單錢包餘額不夠，**自動改用信用卡**
+- 前兩行用**型別 switch** 針對不同付款方式顯示餘額或額度
+
+<!--
+這是執行結果。
+
+顧客設定的付款順序是：先用錢包，錢包不夠再刷卡。第一張訂單 756 元，錢包有 1000 元，付款成功，剩 244 元。第二張訂單 1880 元，錢包不夠，Pay 會自動換下一個付款方式，改用信用卡付款。
+
+最上面兩行是用型別 switch 做的：付款方式是錢包的話就顯示餘額，是信用卡的話就顯示額度。
+-->
+
+---
+
+# GoShop 第 7 步：解題提示
+### Money 實作 fmt.Stringer
+
+```go
+// goshop/main.go
+// Money 是新台幣金額（元）
+type Money int
+
+// String 讓 Money 實作 fmt.Stringer，印出 NT$1,234
+func (m Money) String() string {
+	s := strconv.Itoa(int(m))
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return "NT$" + s
+}
+```
+
+```go
+// goshop/main.go
+type Discount func(subtotal Money) Money
+
+func PercentOff(p int) Discount {
+	return func(subtotal Money) Money {
+		return subtotal * Money(p) / 100
+	}
+}
+```
+
+<!--
+Money 的底層型別是 int，所以加減乘除都可以照常使用。String 方法的內容就是上一章的 formatNT，只是改成方法。
+
+把金額換成 Money 之後，其他地方也要跟著改。例如折扣規則的型別變成接收 Money、傳回 Money。PercentOff 裡的 p 是 int，不能直接和 Money 相乘，要先轉成 Money(p)，Go 不會幫我們自動轉型。
+
+這是一個很典型的重構：改了一個型別，編譯器會告訴我們所有要跟著改的地方，一個一個修好就完成了。
+-->
+
+---
+
+# GoShop 第 7 步：解題提示（續）
+### 付款方式介面
+
+```go
+// goshop/main.go
+// PaymentMethod 是所有付款方式都要具備的行為
+type PaymentMethod interface {
+	Name() string
+	Pay(amount Money) error
+}
+
+// ...
+// Wallet 是 GoShop 錢包；付款會改變餘額，所以用指標接收器
+type Wallet struct {
+	Balance Money
+}
+
+func (w *Wallet) Name() string { return "GoShop 錢包" }
+
+func (w *Wallet) Pay(amount Money) error {
+	if w.Balance < amount {
+		return fmt.Errorf("%w，只剩 %v", ErrInsufficientFunds, w.Balance)
+	}
+	w.Balance -= amount
+	return nil
+}
+```
+
+<!--
+PaymentMethod 介面只有兩個方法，任何型別只要有這兩個方法，就自動實作了這個介面，不需要寫 implements。
+
+Wallet 的兩個方法都用指標接收器。所以實作 PaymentMethod 的是 *Wallet，不是 Wallet，放進介面變數的時候要寫 &Wallet{…}。如果 Pay 用值接收器，扣的會是複本的餘額，錢包永遠扣不到錢。
+
+錯誤訊息用 %w 包裝 ErrInsufficientFunds，呼叫端就能用 errors.Is 判斷是不是餘額不足。
+-->
+
+---
+
+# GoShop 第 7 步：解題提示（續 2）
+### 依序嘗試付款方式
+
+```go
+// goshop/main.go
+// 在編譯時期確認三種付款方式都實作了 PaymentMethod
+var (
+	_ PaymentMethod = CreditCard{}
+	_ PaymentMethod = (*Wallet)(nil)
+	_ PaymentMethod = CashOnDelivery{}
+)
+
+// Pay 依序嘗試付款方式，直到其中一種成功
+func (o *Order) Pay(methods ...PaymentMethod) error {
+	var errs []error
+	for _, m := range methods {
+		err := m.Pay(o.Total)
+		if err == nil {
+			o.PaidBy = m.Name()
+			return nil
+		}
+		errs = append(errs, fmt.Errorf("%s：%w", m.Name(), err))
+	}
+	return fmt.Errorf("訂單 #%d 付款失敗：%w", o.ID, errors.Join(errs...))
+}
+```
+
+<!--
+最上面三行是今天補充的技巧：把一個值指定給介面型別的空白變數。如果哪天有人改壞了 Wallet 的方法，這裡就會編譯失敗，問題在編譯時期就被抓出來。
+
+Order 的 Pay 方法接收任意多個付款方式，一個一個試。成功就記下付款方式的名稱並 return；失敗就把錯誤收集起來，換下一個。全部都失敗的時候，用 errors.Join 把每一個失敗原因一起回報。
+
+這裡的 Pay 完全不知道 m 是信用卡還是錢包，它只認得 PaymentMethod 介面，這就是多型。
+-->
+
+---
 
 # 章節總結
 
@@ -1118,6 +1304,7 @@ name 用型別 switch 判斷實際型別。因為 CreditCard 是用指標實作�
 - **活用介面**：「**接受介面，回傳具體型別**」；`io.Reader` / `io.Writer` 是資料流的共通語言
 - **型別斷言**：可以檢查「是否也實作了另一個介面」（選擇性介面）；型別 switch 的 case 可以是介面
 - **nil 陷阱**：沒有錯誤時直接 `return nil`
+- **GoShop**：`Money` 實作 `fmt.Stringer`；`PaymentMethod` 介面讓信用卡、錢包、貨到付款可以互換
 
 下一章我們會介紹「套件」：怎麼把程式碼拆分成模組、管理第三方套件。
 
@@ -1125,6 +1312,8 @@ name 用型別 switch 判斷實際型別。因為 CreditCard 是用指標實作�
 我們來整理今天學到的東西。
 
 介面描述的是「能做什麼」，Go 的介面是隱性實作的，只要方法齊全就自動實作。介面越小越好，接受介面、回傳具體型別。型別斷言除了取出具體型別，還能檢查選擇性介面。最後記得 nil 介面陷阱：沒有錯誤就直接 return nil。
+
+GoShop 也用上了介面：Money 實作 fmt.Stringer 之後，印出來自動就是 NT$ 加千分位；三種付款方式都實作 PaymentMethod，結帳程式只認介面、不認型別，之後要加 LINE Pay 或 Apple Pay，也不用改結帳的程式。
 
 到這一章為止，我們已經學完了 Go 語言本身的核心語法。但到目前為止，我們所有的程式碼都寫在同一個 main.go 裡。真實的專案會有成千上萬行程式碼，需要拆分成很多個套件，也需要使用別人寫好的第三方套件。下一章就要學 Go 的套件與模組系統。
 -->

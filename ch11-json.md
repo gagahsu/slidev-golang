@@ -64,6 +64,7 @@ layout: default
 - **處理內容未知的 JSON** — 解碼成 `map[string]any`
 - **gob** — Go 自有的編碼格式
 - **補充：encoding/json/v2** — Go 1.27 的新版 JSON 套件
+- **GoShop 專案實作** — 第 11 步：JSON 匯入商品、gob 存檔
 - **章節總結**
 
 <!--
@@ -1221,6 +1222,185 @@ main 先建立清單、存到 bytes.Buffer，再從同一個 Buffer 載入回來
 -->
 
 ---
+layout: section
+class: flex flex-col justify-center items-center text-center
+---
+
+# GoShop 專案實作
+## 第 11 步：JSON 與 gob 存檔
+
+<!--
+回到 GoShop。到目前為止，GoShop 有一個很大的問題：程式一結束，所有訂單和庫存的變化就全部消失了，下次執行又從頭開始。
+
+另外，商品資料還寫死在 main.go 裡，要新增商品就得改程式碼。今天學的 JSON 和 gob，剛好可以解決這兩個問題。
+-->
+
+---
+
+# GoShop 第 11 步：JSON 與 gob 存檔
+### 任務說明
+
+1. 替 `Product`、`Line`、`Order` 加上 **JSON 標籤**（`sku`、`paid_by,omitzero`…）
+2. `store.DecodeProducts(r io.Reader)`：從 JSON 陣列讀取商品，**不認得的欄位視為錯誤**
+3. `Memory.Save(w)`／`Memory.Load(r)`：用 **gob** 存取所有商品、訂單與編號
+4. `main`：有 `data/goshop.gob` 就載入；沒有就從 `data/products.json` 匯入；結束前存檔
+5. `Status` 實作 `MarshalText`，讓 JSON 輸出 `"paid"`，而不是看不懂的數字 `1`
+
+```text
+$ go run .          ← 第一次執行：訂單 #1、#2
+$ go run .          ← 第二次執行：訂單編號接著是 #3、#4，庫存也接著扣
+```
+
+<!--
+這一步要讓 GoShop 能夠存檔。
+
+商品資料改放在 data/products.json，這是一個人可以直接打開來編輯的 JSON 檔。讀取的時候開啟嚴格模式，欄位名稱打錯就會報錯，而不是默默忽略。
+
+存檔用的是 gob。gob 是 Go 專用的二進位格式，速度快、檔案小，而且 time.Time、map 這些型別都能直接存，很適合拿來做程式自己的存檔。
+
+驗收的方式很簡單：連續執行兩次，第二次的訂單編號應該接著第一次，庫存也應該接著扣。
+-->
+
+---
+
+# GoShop 第 11 步：解題提示
+### JSON 標籤
+
+```go
+// goshop/internal/shop/shop.go
+type Order struct {
+	ID        int         `json:"id"`
+	Lines     []Line      `json:"lines"`
+	Subtotal  money.Money `json:"subtotal"`
+	Discount  money.Money `json:"discount"`
+	Total     money.Money `json:"total"`
+	Status    Status      `json:"status"`
+	PaidBy    string      `json:"paid_by,omitzero"`
+	Coupon    string      `json:"coupon,omitzero"` // 折價券代碼
+	CreatedAt time.Time   `json:"created_at"`      // 下單時間
+	ShipBy    time.Time   `json:"ship_by"`         // 預計出貨日
+}
+```
+
+- JSON 的慣例是 `snake_case`；Go 的欄位是 `PascalCase`，用標籤對應
+- `omitzero`（Go 1.24+）：零值（空字串）時不輸出這個欄位
+
+<!--
+JSON 標籤寫在欄位型別的後面，用反引號包起來。它告訴 encoding/json：這個欄位在 JSON 裡叫什麼名字。
+
+JSON 的欄位名稱慣例是小寫加底線，Go 的欄位要大寫開頭才能匯出，兩邊的慣例不一樣，就用標籤來對應。
+
+PaidBy 和 Coupon 加上了 omitzero，沒有付款、沒有用折價券的時候，JSON 裡就不會出現這兩個欄位，輸出比較乾淨。time.Time 會自動編碼成 RFC 3339 格式的字串，例如 2026-09-24T15:12:55+08:00。
+-->
+
+---
+
+# GoShop 第 11 步：解題提示（續）
+### 嚴格解碼與 gob 快照
+
+```go
+// goshop/internal/store/snapshot.go
+// DecodeProducts 從 JSON 陣列讀取商品清單；不認得的欄位視為錯誤。
+func DecodeProducts(r io.Reader) ([]shop.Product, error) {
+	dec := json.NewDecoder(r)
+	dec.DisallowUnknownFields()
+	var products []shop.Product
+	if err := dec.Decode(&products); err != nil {
+		return nil, fmt.Errorf("解析商品 JSON：%w", err)
+	}
+	return products, nil
+}
+
+// snapshot 是寫進 gob 檔的完整資料；欄位要匯出 gob 才看得到。
+type snapshot struct {
+	Products map[string]shop.Product
+	Orders   map[int]shop.Order
+	LastID   int
+}
+```
+
+<!--
+DecodeProducts 接收 io.Reader，而不是檔名。這樣它可以讀檔案、讀網路請求，測試時也可以用 strings.NewReader 直接傳一段字串進去，不需要真的建立檔案。
+
+DisallowUnknownFields 是今天學的嚴格模式。如果有人把 price 打成 prize，就會得到錯誤，而不是讀出價格是 0 的商品。
+
+snapshot 結構是要存進 gob 的資料。Memory 的欄位是小寫的，gob 看不到，所以我們另外定義一個欄位大寫的結構，存檔時把資料搬進去。
+-->
+
+---
+
+# GoShop 第 11 步：解題提示（續 2）
+### 存檔與讀檔
+
+```go
+// goshop/internal/store/snapshot.go
+// Save 把所有商品與訂單用 gob 格式寫到 w。
+func (m *Memory) Save(w io.Writer) error {
+	return gob.NewEncoder(w).Encode(snapshot{m.products, m.orders, m.lastID})
+}
+```
+
+```go
+// goshop/main.go
+func openStore(dir string) (*store.Memory, error) {
+	st := store.NewMemory()
+	f, err := os.Open(filepath.Join(dir, "goshop.gob"))
+	if err == nil {
+		defer f.Close()
+		return st, st.Load(f)
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	// ...
+```
+
+- 沒有快照時，改從 `products.json` 匯入商品（第一次執行）
+
+<!--
+Save 只有一行：建立 gob 編碼器，把 snapshot 編碼寫出去。Load 則是反過來解碼，再把資料放回 Memory。
+
+main 的 openStore 先試著開啟快照檔。開啟成功就載入；如果錯誤是「檔案不存在」，代表這是第一次執行，就改從 products.json 匯入。用 errors.Is 搭配 fs.ErrNotExist 判斷，是檢查檔案不存在的標準寫法。
+
+其他的錯誤，例如沒有讀取權限，就直接回報，不能當成第一次執行。
+-->
+
+---
+
+# GoShop 第 11 步：解題提示（續 3）
+### 自訂 JSON 的輸出：MarshalText
+
+```go
+// goshop/internal/shop/shop.go
+// MarshalText 讓 JSON 輸出 "pending"／"paid"，而不是看不懂的數字。
+func (s Status) MarshalText() ([]byte, error) {
+	if s == Paid {
+		return []byte("paid"), nil
+	}
+	return []byte("pending"), nil
+}
+```
+
+```text
+{
+  "id": 2,
+  "total": 2260,
+  "status": "paid",
+  "paid_by": "貨到付款",
+  "created_at": "2026-09-24T15:12:55.427501531+08:00",
+  ...
+}
+```
+
+<!--
+Status 是一個整數，直接編碼會變成 "status": 1，別人看了根本不知道 1 是什麼意思。
+
+只要替 Status 實作 encoding.TextMarshaler 介面，也就是 MarshalText 方法，encoding/json 就會改用它的結果，輸出 "status": "paid"。反過來，實作 UnmarshalText 就能把 "paid" 解碼回 Status。這又是一個介面的應用：encoding/json 只認得介面，不用知道 Status 是什麼。
+
+下面是用 MarshalIndent 印出的訂單 JSON，status 變成了看得懂的文字，沒有用折價券的 coupon 欄位也因為 omitzero 被省略了。
+-->
+
+---
 
 # 章節總結
 
@@ -1231,6 +1411,7 @@ main 先建立清單、存到 bytes.Buffer，再從同一個 Buffer 載入回來
 - **Decoder / Encoder**：搭配 `io.Reader` / `io.Writer`；`DisallowUnknownFields` 嚴格模式
 - **未知結構**：解碼到 `map[string]any`，數字一律是 `float64`，用型別斷言取值
 - **gob** 是 Go 專用的二進位格式；**`encoding/json/v2`**（1.27）預設更安全
+- **GoShop**：替資料加上 JSON 標籤、從 `products.json` 匯入商品，用 gob 快照讓資料在重新執行後還在
 
 下一章我們會介紹「系統與檔案」：命令列旗標、系統訊號，以及檔案的讀寫。
 
@@ -1238,6 +1419,8 @@ main 先建立清單、存到 bytes.Buffer，再從同一個 Buffer 載入回來
 我們來整理今天學到的東西。
 
 JSON 是現代程式交換資料的共通語言。Go 用 struct 標籤對應 JSON 的鍵，Unmarshal 解碼、Marshal 編碼，記得只有匯出的欄位會被處理。omitempty 和 omitzero 用來省略空值，Decoder 和 Encoder 可以直接讀寫 io.Reader 和 io.Writer，嚴格模式可以抓到打錯字的鍵。
+
+GoShop 這一步終於「記得住」東西了：第一次執行從 products.json 匯入商品，結束前把所有資料存成 gob 快照，下次執行接著用。JSON 給人看、給別的系統交換資料；gob 給 Go 程式自己存檔，兩者各有用途。
 
 今天的綜合練習用 bytes.Buffer 模擬檔案。下一章就要學真正的檔案操作：建立、讀取、寫入、刪除檔案，還有處理 CSV 格式。另外也會學命令列旗標和系統訊號，讓我們寫出真正實用的命令列工具。
 -->

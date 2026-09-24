@@ -898,6 +898,237 @@ checkField 用逗號切開標籤裡的規則，再用 strings.Cut 把 max=10 拆
 -->
 
 ---
+layout: section
+class: flex flex-col justify-center items-center text-center
+---
+
+# GoShop 專案實作
+## 第 19 步：欄位驗證器
+
+<!--
+來到 GoShop 的最後一步。
+
+現在 GoShop 有三個地方會收到外部的資料：API 的下單請求、後台的新增商品表單、CSV 匯入。每個地方都要檢查「SKU 不能空白」「數量要大於 0」，而且檢查的程式碼都是一大串 if，寫法還各不相同。
+
+encoding/json 用 struct tag 決定欄位名稱，我們也可以用同樣的方法，用 struct tag 描述驗證規則，再用反射讀出來。
+-->
+
+---
+
+# GoShop 第 19 步：欄位驗證器
+### 任務說明
+
+1. 新增 `internal/validate`，`Struct(v any) error` 依照 **`validate` 標籤**檢查欄位：
+
+| 規則 | 數字 | 字串 | 切片 |
+| --- | --- | --- | --- |
+| `required` | 不是 0 | 不是空字串 | 不是 nil |
+| `min=N`／`max=N` | 值 ≥ N／≤ N | **字數** ≥ N／≤ N | 長度 ≥ N／≤ N |
+
+2. 切片裡的結構要逐一檢查，錯誤訊息用 **JSON 欄位名稱**，例如 `items[0].qty`
+3. 所有問題用 `errors.Join` 一次回報；每個問題是一個 `*FieldError`
+4. 替 `Product`、`checkout.Item`、`checkout.Cart` 加上標籤，在 API、後台表單、CSV 匯入使用
+
+```text
+$ curl -X POST localhost:8080/api/orders -d '{"items":[{"sku":"","qty":0}]}'
+{"error":"欄位 items[0].sku 不符合規則 required\n欄位 items[0].qty 不符合規則 min=1"}
+```
+
+<!--
+這一步要寫一個小小的驗證套件，概念和很多網頁框架內建的驗證器一樣。
+
+規則寫在 validate 標籤裡，用逗號分隔。min 和 max 會依照欄位的種類做不同的比較：數字比大小，字串比字數，切片比長度。字串要算的是字數而不是位元組數，第 3 章學過，中文一個字是 3 個位元組。
+
+錯誤訊息要用 JSON 的欄位名稱，因為呼叫 API 的前端工程師看到的是 JSON，他不知道 Go 的欄位叫 Qty。
+-->
+
+---
+
+# GoShop 第 19 步：解題提示
+### 在標籤裡描述規則
+
+```go
+// goshop/internal/shop/shop.go
+type Product struct {
+	SKU   string      `json:"sku" validate:"required,max=32"`
+	Name  string      `json:"name" validate:"required,max=100"`
+	Price money.Money `json:"price" validate:"min=1"`
+	Stock int         `json:"stock" validate:"min=0"`
+}
+```
+
+```go
+// goshop/internal/checkout/cart.go
+type Item struct {
+	SKU string `json:"sku" validate:"required"`
+	Qty int    `json:"qty" validate:"min=1,max=99"`
+}
+
+// Cart 是購物車。
+type Cart struct {
+	Items  []Item `json:"items" validate:"min=1,max=20"`
+```
+
+<!--
+先看怎麼使用。規則直接寫在結構的定義上，和 JSON 標籤放在一起，一眼就能看出這個欄位的限制。
+
+SKU 必填、最多 32 個字；價格至少 1 元；每個品項最少買 1 件、最多 99 件；購物車最少 1 項、最多 20 項。
+
+注意 Price 的型別是 money.Money，不是 int。但它的底層型別是 int，反射的 Kind 還是 reflect.Int，所以驗證器不需要特別處理自訂型別。
+-->
+
+---
+
+# GoShop 第 19 步：解題提示（續）
+### 走訪欄位、讀取標籤
+
+```go
+// goshop/internal/validate/validate.go
+func check(rv reflect.Value, prefix string) []error {
+	var errs []error
+	for f, fv := range rv.Fields() { // Go 1.26：用迭代器走訪欄位
+		if !f.IsExported() {
+			continue
+		}
+		name := prefix + fieldName(f)
+		for rule := range strings.SplitSeq(f.Tag.Get("validate"), ",") {
+			if rule != "" && !ok(fv, rule) {
+				errs = append(errs, &FieldError{Field: name, Rule: rule})
+			}
+		}
+		if fv.Kind() == reflect.Slice { // 切片裡的結構也要檢查
+			for i := range fv.Len() {
+				// ...
+					errs = append(errs, check(elem, fmt.Sprintf("%s[%d].", name, i))...)
+				}
+			}
+		}
+	}
+	return errs
+}
+```
+
+<!--
+check 是驗證器的核心。它用本章補充的 Go 1.26 新寫法 rv.Fields()，一次拿到每個欄位的描述 f 和欄位的值 fv。
+
+沒有匯出的欄位跳過，反射也不能讀取它們的值。
+
+f.Tag.Get("validate") 取出標籤字串，用 strings.SplitSeq 切成一條一條規則，逐一檢查，不符合就記下一個 FieldError。
+
+如果欄位是切片，就走訪每一個元素，元素是結構的話，遞迴呼叫 check，並且把 items[0]. 這樣的前綴傳下去，錯誤訊息就會是 items[0].qty。
+-->
+
+---
+
+# GoShop 第 19 步：解題提示（續 2）
+### 依 Kind 決定怎麼比較
+
+```go
+// goshop/internal/validate/validate.go
+func ok(v reflect.Value, rule string) bool {
+	if rule == "required" {
+		return !v.IsZero()
+	}
+	key, arg, _ := strings.Cut(rule, "=")
+	n, err := strconv.ParseInt(arg, 10, 64)
+	if err != nil {
+		panic("validate: 規則寫錯了：" + rule) // 這是程式設計師的錯誤
+	}
+	var size int64
+	switch v.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		size = v.Int()
+	case reflect.String:
+		size = int64(utf8.RuneCountInString(v.String()))
+	case reflect.Slice, reflect.Map:
+		size = int64(v.Len())
+	// ...
+```
+
+<!--
+ok 判斷一個值是否符合一條規則。
+
+required 最簡單，用 IsZero 判斷是不是零值。
+
+min 和 max 先把規則切成名稱和數字，再依照值的 Kind 算出要比較的大小：整數就是值本身，字串是字數，切片和 map 是長度。
+
+規則寫錯的時候，例如 min=abc，我們選擇 panic 而不是傳回 error。第 6 章的指導方針說過：這是寫程式的人的錯誤，不是使用者的錯誤，應該在開發階段就讓它爆出來。
+-->
+
+---
+
+# GoShop 第 19 步：解題提示（續 3）
+### 一個驗證器，三個地方使用
+
+```go
+// goshop/internal/web/api.go
+	if err := validate.Struct(cart); err != nil {
+		writeErr(w, err)
+		return
+	}
+```
+
+```go
+// goshop/internal/store/csv.go
+		p := shop.Product{
+			SKU: rec[0], Name: rec[1], Price: money.Money(price), Stock: stock}
+		if err := validate.Struct(p); err != nil {
+			errs = append(errs, fmt.Errorf("第 %d 行：%w", i+1, err))
+			continue
+		}
+```
+
+```text
+$ go run . -import bad.csv
+已匯入 1 項商品
+以下資料列被略過：
+ 第 2 行：欄位 name 不符合規則 required
+欄位 price 不符合規則 min=1
+```
+
+<!--
+驗證器寫好之後，三個地方都只要一行 validate.Struct 就能完成檢查：API 解碼完購物車之後、後台表單組好商品之後、CSV 每一行轉成商品之後。
+
+API 的 writeErr 也加了一個 case：錯誤鏈裡有 *FieldError 的時候回 400。
+
+以後要加新的規則，例如 SKU 只能是英文和數字，只要改驗證器和標籤，三個地方同時生效。這就是反射最適合的場景：寫一次通用的工具，給很多不同的型別使用。
+-->
+
+---
+
+# GoShop 完成了！
+
+```text
+goshop/                            2,700 行 Go，10 個套件，全部有測試
+├── main.go、doc.go、Makefile      命令列、伺服器、版本、跨平台編譯
+└── internal/
+    ├── money/      金額與千分位（Stringer、Example）              Ch 5、7、9、17
+    ├── shop/       商品、訂單、錯誤、時區（JSON／Text 標籤）        Ch 4、6、10、11
+    ├── checkout/   購物車、折扣、折價券、結帳與付款                Ch 5、8、10、16
+    ├── payment/    付款方式介面                                  Ch 7
+    ├── store/      Store 介面：記憶體＋gob、MySQL、CSV            Ch 11～13、16
+    ├── rates/      匯率 API 客戶端                               Ch 14
+    ├── webhook/    POST 通知、背景 worker pool                   Ch 14、16
+    ├── web/        RESTful API、後台模板、登入                    Ch 15、18
+    ├── auth/       bcrypt、HMAC 簽章憑證                          Ch 18
+    └── validate/   反射驗證器                                    Ch 19
+```
+
+- **unsafe** 沒有出現在 GoShop 裡：一般的應用程式**不需要**它，這正是本章的結論
+
+<!--
+恭喜大家，GoShop 完成了！
+
+從第 0 章的一行 Println 開始，GoShop 現在有兩千七百行 Go 程式碼、十個套件，每個套件都有測試。它可以用命令列操作、可以當網站服務、可以接 MySQL、可以處理很多人同時搶購，還有登入和 HTTPS。
+
+右邊標註了每個套件用到的章節，大家可以看到，幾乎每一章的內容都在這個專案裡留下了痕跡。
+
+大家可能發現，今天的 unsafe 沒有用在 GoShop 裡。這不是忘記了，而是刻意的：unsafe 是給標準函式庫和極少數效能關鍵的程式用的，一般的應用程式完全不需要它。知道什麼時候不該用一個工具，跟知道怎麼用它一樣重要。
+
+建議大家把自己的 GoShop 放上 GitHub，它就是你學會 Go 最好的證明。
+-->
+
+---
 
 # 章節總結
 
@@ -908,6 +1139,7 @@ checkField 用逗號切開標籤裡的規則，再用 strings.Cut 把 max=10 拆
 - **反射的代價**：失去型別安全、較慢、難讀 → 優先考慮介面、型別 switch、**泛型**
 - **unsafe**：`Sizeof` / `Alignof` / `Offsetof` 查記憶體配置；`unsafe.Pointer` 轉換指標；`uintptr` 運算要在同一運算式，或用 `unsafe.Add`
 - **零複製**：`unsafe.String` / `Slice`（1.20+）；標準函式庫（`strings.Builder`、`reflect`、`atomic`）已安全封裝，應用程式**幾乎不需要**直接使用
+- **GoShop**：用反射讀取 `validate` 標籤，一個驗證器同時檢查 API 請求、後台表單與 CSV 匯入
 
 <!--
 我們來整理今天學到的東西。
@@ -915,6 +1147,8 @@ checkField 用逗號切開標籤裡的規則，再用 strings.Cut 把 max=10 拆
 反射讓程式在執行時期查看和操作型別與值，JSON、fmt、database/sql 都靠它運作。修改值要傳指標，讀取 struct 標籤用 Tag.Get。但反射有失去型別安全、效能差、難讀的代價，能用介面和泛型就不要用反射。
 
 unsafe 讓我們繞過型別系統直接操作記憶體，標準函式庫用它打造了很多高效能的工具，但應用程式碼幾乎不需要直接使用它。
+
+GoShop 的最後一步用反射寫了一個欄位驗證器：讀取 struct tag、走訪欄位、依 Kind 判斷怎麼比較，一次檢查 API 請求、後台表單和 CSV 匯入。到這裡，GoShop 從一行 Println 長成了一個兩千多行、十個套件、有測試、有資料庫、有網站的完整系統。
 -->
 
 ---

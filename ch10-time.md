@@ -59,6 +59,7 @@ layout: default
 - **時間值的格式化** — 參考時間 `2006-01-02 15:04:05`、`Format`、`Parse`
 - **時間值的管理** — 增減時間、設定時區
 - **比較與時間長度** — `Before` / `After` / `Equal`、`time.Duration`、測量執行時間
+- **GoShop 專案實作** — 第 10 步：有期限的折價券與預計出貨日
 - **章節總結**
 
 <!--
@@ -810,6 +811,159 @@ main 呼叫 parseAll 取得排序好的切片，再用 Sub 計算到期日和今
 -->
 
 ---
+layout: section
+class: flex flex-col justify-center items-center text-center
+---
+
+# GoShop 專案實作
+## 第 10 步：折價券與出貨日
+
+<!--
+回到 GoShop。電商的行銷活動幾乎都跟時間有關：「本週限定 85 折」「週年慶到月底結束」。訂單也要顯示下單時間和預計出貨日。
+
+今天學的 time 套件，剛好可以讓 GoShop 處理這些需求。
+-->
+
+---
+
+# GoShop 第 10 步：折價券與出貨日
+### 任務說明
+
+1. `checkout.Coupon`：代碼、折扣百分比、`Start`（包含）、`End`（不包含）
+   - `Valid(t time.Time) bool`：判斷 `t` 是否在有效期間 `[Start, End)` 內
+2. 訂單加上 `Coupon`、`CreatedAt`（下單時間）、`ShipBy`（預計出貨日）
+3. `shop.ShipDate(t, n)`：下單後第 `n` 個**工作天**（跳過週六、週日）
+4. `Service` 加上 `Now func() time.Time`，**測試時可以把時間固定**
+5. 時區固定用 `Asia/Taipei`；收據顯示「2026-09-24 15:11（四）」的格式
+
+```text
+SUMMER：折價券無效或已過期
+===== 訂單 #1（已付款）=====
+下單時間： 2026-09-24 15:11（四）
+衣索比亞咖啡豆 x 4	NT$1,800
+小計： NT$1,800 折扣： NT$270 WEEK15
+應付： NT$1,530 ／付款方式： 貨到付款
+預計出貨： 2026-09-28
+```
+
+<!--
+這一步要替 GoShop 加上折價券和出貨日。
+
+折價券的有效期間用「包含開始、不包含結束」的寫法，例如 9 月 1 日 0 點到 10 月 1 日 0 點，剛好就是整個 9 月，不用去想 9 月 30 日 23 點 59 分 59 秒要怎麼表示。
+
+出貨日的規則是「下單後 2 個工作天」，遇到週末要跳過。看輸出：星期四下單，往後數 2 個工作天，星期五是第 1 天，跳過週六週日，星期一是第 2 天，所以是 9 月 28 日。
+
+第 4 點是一個很重要的測試技巧，等一下會詳細說明。
+-->
+
+---
+
+# GoShop 第 10 步：解題提示
+### 有效期間與工作天
+
+```go
+// goshop/internal/checkout/coupon.go
+// Valid 判斷時間 t 是否在有效期間 [Start, End) 內。
+func (c Coupon) Valid(t time.Time) bool {
+	return !t.Before(c.Start) && t.Before(c.End)
+}
+```
+
+```go
+// goshop/internal/shop/shop.go
+// Location 是商店所在的時區，下單時間和出貨日都以它為準。
+var Location, _ = time.LoadLocation("Asia/Taipei")
+
+// ShipDate 計算預計出貨日：t 之後的第 n 個工作天（跳過週六、週日）。
+func ShipDate(t time.Time, n int) time.Time {
+	for n > 0 {
+		t = t.AddDate(0, 0, 1)
+		if wd := t.Weekday(); wd != time.Saturday && wd != time.Sunday {
+			n--
+		}
+	}
+	return t
+}
+```
+
+<!--
+Valid 用兩個比較組合出半開區間：「t 不在 Start 之前」代表 t 大於等於 Start，「t 在 End 之前」代表 t 小於 End。時間要用 Before、After、Equal 比較，不能用 < 和 ==。
+
+ShipDate 每次往後加一天，如果這天不是週六或週日，才把剩下的天數減 1，直到數完為止。用 AddDate 加天數，遇到月底、跨年都會自動處理。
+
+時區的部分，我們在 shop 套件宣告一個 Location 變數。為了在沒有安裝時區資料的系統（例如精簡的 Docker 映像檔）也能執行，shop 套件還 import 了 time/tzdata，把時區資料編譯進執行檔。
+-->
+
+---
+
+# GoShop 第 10 步：解題提示（續）
+### 結帳時套用折價券
+
+```go
+// goshop/internal/checkout/checkout.go
+	o.CreatedAt = s.now().In(shop.Location)
+	o.ShipBy = shop.ShipDate(o.CreatedAt, 2)
+
+	rules := s.Rules
+	if code := cart.Coupon; code != "" {
+		c, ok := s.Coupons[code]
+		if !ok || !c.Valid(o.CreatedAt) {
+			return shop.Order{}, fmt.Errorf("%s：%w", code, shop.ErrCoupon)
+		}
+		o.Coupon = code
+		// 先複製再 append，才不會改到 s.Rules 共用的底層陣列（Ch 4）
+		rules = append(slices.Clone(s.Rules), PercentOff(c.PercentOff))
+	}
+	o.Discount = Best(o.Subtotal, rules...)
+```
+
+- 折價券也只是**多一個折扣規則**，最後一樣交給 `Best` 挑最划算的
+
+<!--
+結帳的時候，先記下下單時間，轉成商店時區，再算出預計出貨日。
+
+套用折價券的方式很優雅：折價券不需要特別的邏輯，它就只是「多一個 PercentOff 規則」，最後一樣交給第 5 章寫的 Best 挑出最划算的那一個。這就是把折扣設計成函式的好處。
+
+特別注意 append 前面的 slices.Clone。如果直接 append 到 s.Rules 上，而 s.Rules 的底層陣列剛好還有空間，新的規則就會寫進共用的陣列，影響到下一位顧客。這是第 4 章「切片共用底層陣列」的真實案例。
+-->
+
+---
+
+# GoShop 第 10 步：解題提示（續 2）
+### 把「現在時間」變成可以替換的函式
+
+```go
+// goshop/internal/checkout/checkout.go
+	Now     func() time.Time // 取得現在時間；測試時可以換掉
+}
+
+func (s *Service) now() time.Time {
+	if s.Now == nil {
+		return time.Now()
+	}
+	return s.Now()
+}
+```
+
+```go
+// goshop/internal/checkout/checkout_test.go
+	loc := time.FixedZone("CST", 8*60*60)
+	// 2026-09-25 是星期五，下午 3 點下單
+	now := time.Date(2026, 9, 25, 15, 0, 0, 0, loc)
+
+	svc := newService()
+	svc.Now = func() time.Time { return now }
+```
+
+<!--
+如果程式裡直接呼叫 time.Now，測試的結果就會隨著執行的日期改變：今天星期四跑會過，星期五跑可能就失敗了。
+
+解決方法是把「取得現在時間」變成 Service 的一個欄位。正式執行時它是 nil，就用真正的 time.Now；測試時換成一個永遠傳回固定時間的函式。
+
+測試裡我們把時間固定在 2026 年 9 月 25 日星期五下午 3 點，就可以穩定地驗證「星期五下單，出貨日是下星期二」，以及折價券在有效期間前後的行為。這個技巧叫做「注入時鐘」，在實務上非常常用。
+-->
+
+---
 
 # 章節總結
 
@@ -820,6 +974,7 @@ main 呼叫 parseAll 取得排序好的切片，再用 Sub 計算到期日和今
 - **增減時間**：`Add(Duration)`、`AddDate(年, 月, 日)`；小心**月底進位**
 - **時區**：內部一律 UTC，顯示時 `t.In(loc)`；精簡映像檔用 `import _ "time/tzdata"`
 - **比較與長度**：用 `Equal` 不要用 `==`；`Sub` 得到 `Duration`；`time.Since` 測量執行時間
+- **GoShop**：折價券用 `Before` 判斷有效期間，`AddDate` 與 `Weekday` 算出貨日，時區固定為 `Asia/Taipei`
 
 下一章我們會介紹「JSON 的編碼與解碼」：Go 結構和 JSON 資料的互相轉換。
 
@@ -827,6 +982,8 @@ main 呼叫 parseAll 取得排序好的切片，再用 Sub 計算到期日和今
 我們來整理今天學到的東西。
 
 Go 的時間格式化用參考時間 2006 年 1 月 2 日下午 3 點 4 分 5 秒，記住 1234567 的口訣。解析使用者輸入時要注意時區，內部一律用 UTC。加減時間用 Add 和 AddDate，小心月底進位。比較時間用 Equal，不要用 ==。Duration 代表時間長度，用 time.Since 測量執行時間。
+
+GoShop 這一步處理了電商最常見的時間問題：折價券的有效期間是「包含開始、不包含結束」的半開區間；出貨日要跳過週末；時區一律用商店所在的台北時間。還有一個很實用的技巧：把「取得現在時間」變成一個可以替換的函式，測試就能固定在任何一天。
 
 下一章要學 JSON。現代的程式幾乎都透過 JSON 交換資料：前端和後端、服務和服務之間、設定檔。Go 用 encoding/json 套件，搭配 struct 標籤，就能輕鬆地在 Go 結構和 JSON 之間互相轉換。今天學的 time.Time，在 JSON 裡就會變成 RFC3339 格式的字串。
 -->

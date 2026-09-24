@@ -59,6 +59,7 @@ layout: default
 - **if 敘述** — `if`、`else`、`else if`、起始賦值
 - **switch 敘述** — 基本用法、無條件 switch、`fallthrough`
 - **迴圈** — `for` 的三種型態、`for range`、`break` 與 `continue`
+- **GoShop 專案實作** — 第 2 步：會員折扣、滿額免運與數量試算表
 - **章節總結**
 
 <!--
@@ -1000,6 +1001,121 @@ n++ 這行讓 range 產生的 0 到 29 變成 1 到 30。因為 Go 1.22 之後�
 -->
 
 ---
+layout: section
+class: flex flex-col justify-center items-center text-center
+---
+
+# GoShop 專案實作
+## 第 2 步：折扣、運費與試算表
+
+<!--
+回到 GoShop。上一步我們只算了一筆固定的訂單，折扣也是用「等級乘以 5」這種取巧的算法。
+
+有了今天的 if、switch、for，我們可以把規則寫得更清楚，還能一次試算好幾種購買數量。
+-->
+
+---
+
+# GoShop 第 2 步：折扣、運費與試算表
+### 任務說明
+
+1. `levelName(level int) string`：用 `switch` 傳回會員等級的中文名稱
+2. `discountPercent(level int) int`：金卡 10%、銀卡 5%、其他 0%
+3. `shipping(total int) int`：滿 1000 元免運，否則運費 60 元（用**提早 return**）
+4. 用 `for range` 試算買 1 ～ 6 件的價格；超過庫存（4 件）時用 `break` 停止
+
+```text
+===== GoShop 價格試算 =====
+商品： 衣索比亞咖啡豆 ／ 銀卡會員
+數量   小計   折扣   運費   應付
+   1    450     22     60    488
+   2    900     45     60    915
+   3   1350     67      0   1283
+   4   1800     90      0   1710
+庫存只剩 4 件，停止試算
+```
+
+<!--
+這一步要把 GoShop 的價格規則寫成三個小函式，再用迴圈印出一張試算表。
+
+會員折扣改用 switch：金卡打 9 折、銀卡打 95 折。運費規則用 if：滿 1000 元免運，不然收 60 元。
+
+試算表的部分，用 range 整數產生 1 到 6 件，但這個商品只剩 4 件庫存，所以算到第 5 件的時候要用 break 跳出迴圈。
+
+注意看輸出：買 2 件的時候應付 915 元，買 3 件反而因為免運，運費變成 0。這就是電商常見的「湊免運」情境。
+-->
+
+---
+
+# GoShop 第 2 步：解題提示
+### 用 switch 和 if 表達規則
+
+```go
+// goshop/main.go
+// discountPercent 傳回會員等級的折扣百分比
+func discountPercent(level int) int {
+	switch level {
+	case Gold:
+		return 10
+	case Silver:
+		return 5
+	}
+	return 0
+}
+
+// shipping 計算運費：滿額免運就提早 return
+func shipping(total int) int {
+	if total >= freeShipping {
+		return 0
+	}
+	return shippingFee
+}
+```
+
+<!--
+discountPercent 用 switch 比對會員等級，符合的 case 直接 return。Go 的 switch 不需要寫 break，執行完一個 case 就會自動結束。沒有任何 case 符合的時候，就會往下執行到最後的 return 0。
+
+shipping 用的是今天學的「提早 return」寫法：先處理特殊情況，滿額就直接傳回 0；剩下的就是一般情況，傳回運費。這樣就不需要 else，程式碼更平。
+
+levelName 的寫法和 discountPercent 幾乎一樣，這裡就不列出來了。
+-->
+
+---
+
+# GoShop 第 2 步：解題提示（續）
+### 用 for range 印出試算表
+
+```go
+// goshop/main.go
+	fmt.Println("數量   小計   折扣   運費   應付")
+	for qty := range 6 {
+		qty++ // 從 1 件開始
+		if qty > stock {
+			fmt.Println("庫存只剩", stock, "件，停止試算")
+			break
+		}
+		subtotal := price * qty
+		discount := subtotal * discountPercent(level) / 100
+		total := subtotal - discount
+		fee := shipping(total)
+		fmt.Printf("%4d %6d %6d %6d %6d\n",
+			qty, subtotal, discount, fee, total+fee)
+	}
+```
+
+- `%4d`、`%6d`：整數至少佔 4、6 格並靠右對齊，表格才會排得整齊
+
+<!--
+for qty := range 6 會產生 0 到 5，所以第一行先 qty++ 讓它從 1 開始。Go 1.22 之後每一圈的 qty 都是新的變數，在迴圈裡修改它不會影響下一圈。
+
+進入迴圈先檢查庫存，超過庫存就印出提示並 break。
+
+計算的部分呼叫剛剛寫好的兩個函式。Printf 的 %4d 和 %6d 讓數字靠右對齊，第 9 章會完整介紹格式化動詞。
+
+執行後就會看到上一頁的試算表。
+-->
+
+---
 
 # 章節總結
 
@@ -1008,6 +1124,7 @@ n++ 這行讓 range 產生的 0 到 29 變成 1 到 30。因為 Go 1.22 之後�
 - **for 是唯一的迴圈**：條件式（while）、無限迴圈、三段式、`range`
 - **現代寫法**：`for i := range n`（Go 1.22+）；每一圈的迴圈變數都是新的一份
 - **break / continue**：結束迴圈／跳過這一圈；巢狀迴圈可搭配標籤
+- **GoShop**：用 `switch` 決定會員折扣、`if` 判斷免運、`for range` 印出數量試算表
 
 下一章我們會深入介紹 Go 的「核心型別」：布林、整數、浮點數、字串與 rune。
 
@@ -1017,6 +1134,8 @@ n++ 這行讓 range 產生的 0 到 29 變成 1 到 30。因為 Go 1.22 之後�
 if 的部分，記得起始賦值和提早 return 這兩個 Go 特有的慣例。switch 會自動 break，無條件 switch 可以取代一長串的 else if。for 是 Go 唯一的迴圈，但有四種寫法，現在最主流的是 range 整數和 range 集合。
 
 有了條件判斷和迴圈，我們已經可以寫出很多實用的小程式了。
+
+GoShop 也因為今天的內容變聰明了：switch 依會員等級決定折扣，if 判斷要不要收運費，for 迴圈一次算出買 1 到 N 件的價格，庫存不夠時用 break 停下來。
 
 下一章我們會回頭仔細看 Go 的核心型別：整數有哪幾種、浮點數為什麼會有誤差、字串和 rune 有什麼不一樣。今天範例裡走訪中文字串時位置跳了 3 格的原因，下一章就會揭曉。
 -->
