@@ -1328,6 +1328,8 @@ snapshot 結構是要存進 gob 的資料。Memory 的欄位是小寫的，gob �
 -->
 
 ---
+zoom: 0.94
+---
 
 # GoShop 第 11 步：解題提示（續 2）
 ### 存檔與讀檔
@@ -1336,7 +1338,8 @@ snapshot 結構是要存進 gob 的資料。Memory 的欄位是小寫的，gob �
 // goshop/internal/store/snapshot.go
 // Save 把所有商品與訂單用 gob 格式寫到 w。
 func (m *Memory) Save(w io.Writer) error {
-	return gob.NewEncoder(w).Encode(snapshot{m.products, m.orders, m.lastID})
+	snap := snapshot{m.products, m.orders, m.lastID}
+	return gob.NewEncoder(w).Encode(snap)
 }
 ```
 

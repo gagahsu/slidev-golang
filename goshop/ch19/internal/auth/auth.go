@@ -31,7 +31,8 @@ func HashPassword(password string) (string, error) {
 
 // CheckPassword 比對密碼是否正確。
 func (a *Auth) CheckPassword(password string) bool {
-	return bcrypt.CompareHashAndPassword(a.PasswordHash, []byte(password)) == nil
+	err := bcrypt.CompareHashAndPassword(a.PasswordHash, []byte(password))
+	return err == nil
 }
 
 // NewToken 產生「到期時間.簽章」格式的憑證，例如 1790000000.q7Xk…

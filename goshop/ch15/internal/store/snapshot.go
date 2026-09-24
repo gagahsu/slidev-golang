@@ -29,7 +29,8 @@ type snapshot struct {
 
 // Save 把所有商品與訂單用 gob 格式寫到 w。
 func (m *Memory) Save(w io.Writer) error {
-	return gob.NewEncoder(w).Encode(snapshot{m.products, m.orders, m.lastID})
+	snap := snapshot{m.products, m.orders, m.lastID}
+	return gob.NewEncoder(w).Encode(snap)
 }
 
 // Load 從 gob 格式讀回所有商品與訂單。

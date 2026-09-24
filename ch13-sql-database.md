@@ -1217,6 +1217,8 @@ GRANT ALL ON goshop_app.* TO 'gouser'@'localhost';
 -->
 
 ---
+zoom: 0.97
+---
 
 # GoShop 第 13 步：解題提示
 ### Store 介面
@@ -1254,6 +1256,9 @@ Store 介面列出了 GoShop 需要的所有資料操作：查商品、存商品
 checkout 的 Service 只改了一個地方：Store 欄位的型別從 *store.Memory 改成 store.Store。結帳的邏輯一行都不用動，這就是「依賴介面，而不是依賴實作」。
 -->
 
+---
+class: code-sm
+zoom: 0.88
 ---
 
 # GoShop 第 13 步：解題提示（續）
@@ -1296,6 +1301,9 @@ RowsAffected 是 0 的時候，stockError 再查一次目前的庫存，組出�
 -->
 
 ---
+class: code-sm
+zoom: 0.88
+---
 
 # GoShop 第 13 步：解題提示（續 2）
 ### 寫入訂單，最後 Commit
@@ -1335,6 +1343,9 @@ func nullString(s string) sql.Null[string] {
 -->
 
 ---
+class: code-sm
+zoom: 0.94
+---
 
 # GoShop 第 13 步：解題提示（續 3）
 ### 合約測試：兩種實作，同一組測試
@@ -1351,7 +1362,7 @@ func TestMemory(t *testing.T) {
 }
 
 // 設定環境變數才會執行，例如：
-// GOSHOP_TEST_DSN="gouser:gopass@tcp(127.0.0.1:3306)/goshop_test" go test ./...
+// export GOSHOP_TEST_DSN="gouser:gopass@tcp(127.0.0.1:3306)/goshop_test"
 func TestMySQL(t *testing.T) {
 	dsn := os.Getenv("GOSHOP_TEST_DSN")
 	if dsn == "" {
@@ -1371,6 +1382,8 @@ func TestMySQL(t *testing.T) {
 MySQL 的測試需要資料庫，沒有設定環境變數的時候用 t.Skip 略過，這樣其他人沒有安裝 MySQL，go test 也能通過。t.Context 是 Go 1.24 新增的，測試結束時會自動取消。
 -->
 
+---
+zoom: 0.86
 ---
 
 # GoShop 第 13 步：解題提示（續 4）

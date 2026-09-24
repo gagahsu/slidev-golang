@@ -16,6 +16,15 @@
 | 8 | 套件與 Go Modules | 18 | 加密安全：SHA-2/3、AES-GCM、RSA-OAEP、Ed25519、TLS |
 | 9 | 除錯：fmt、log / slog、單元測試 | 19 | reflect 與 unsafe |
 
+## 課程專案：GoShop 迷你電商後台
+
+每一章的最後都有一節「**GoShop 專案實作**」，把這一章學到的東西用在同一個專案上：
+第 0 章建立專案，前 7 章寫在單一 `main.go`，第 8 章拆成套件，之後陸續加上測試、JSON／gob 存檔、
+命令列工具、MySQL、REST API 與後台網頁、並行安全、HTTPS 登入，到第 19 章完成一個約 2,700 行、
+10 個套件、全部有測試的系統。
+
+每一步的完整參考解答在 [`goshop/ch00`](goshop/) ～ [`goshop/ch19`](goshop/)，說明見 [goshop/README.md](goshop/README.md)。
+
 ## 使用方式
 
 ```bash
@@ -33,6 +42,7 @@ pnpm build        # 產生靜態網站到 dist/
 GOTOOLCHAIN=go1.27.0 pnpm check:go            # 編譯 + go vet 所有可獨立編譯的範例
 GOTOOLCHAIN=go1.27.0 pnpm check:go ch16 --run # 逐一執行，對照投影片上標註的輸出
 WITH_DEPS=1 pnpm check:go ch13                # 一併檢查使用第三方模組（MySQL 驅動程式）的範例
+GOTOOLCHAIN=go1.27.0 pnpm check:project        # GoShop：每一步 gofmt／vet／test，並比對投影片摘錄
 ```
 
 詳細的撰寫規範請見 [CLAUDE.md](CLAUDE.md)。

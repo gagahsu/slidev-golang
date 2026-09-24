@@ -914,6 +914,8 @@ encoding/json 用 struct tag 決定欄位名稱，我們也可以用同樣的方
 -->
 
 ---
+class: code-sm
+---
 
 # GoShop 第 19 步：欄位驗證器
 ### 任務說明
@@ -930,8 +932,8 @@ encoding/json 用 struct tag 決定欄位名稱，我們也可以用同樣的方
 4. 替 `Product`、`checkout.Item`、`checkout.Cart` 加上標籤，在 API、後台表單、CSV 匯入使用
 
 ```text
-$ curl -X POST localhost:8080/api/orders -d '{"items":[{"sku":"","qty":0}]}'
-{"error":"欄位 items[0].sku 不符合規則 required\n欄位 items[0].qty 不符合規則 min=1"}
+$ curl -X POST localhost:8080/api/orders -d '{"items":[{"sku":"A","qty":0}]}'
+{"error":"欄位 items[0].qty 不符合規則 min=1"}
 ```
 
 <!--
@@ -978,6 +980,9 @@ SKU 必填、最多 32 個字；價格至少 1 元；每個品項最少買 1 件
 -->
 
 ---
+class: code-sm
+zoom: 0.85
+---
 
 # GoShop 第 19 步：解題提示（續）
 ### 走訪欄位、讀取標籤
@@ -999,7 +1004,8 @@ func check(rv reflect.Value, prefix string) []error {
 		if fv.Kind() == reflect.Slice { // 切片裡的結構也要檢查
 			for i := range fv.Len() {
 				// ...
-					errs = append(errs, check(elem, fmt.Sprintf("%s[%d].", name, i))...)
+					sub := fmt.Sprintf("%s[%d].", name, i)
+					errs = append(errs, check(elem, sub)...)
 				}
 			}
 		}
@@ -1036,7 +1042,8 @@ func ok(v reflect.Value, rule string) bool {
 	}
 	var size int64
 	switch v.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+	case reflect.Int, reflect.Int8, reflect.Int16,
+		reflect.Int32, reflect.Int64:
 		size = v.Int()
 	case reflect.String:
 		size = int64(utf8.RuneCountInString(v.String()))
@@ -1055,6 +1062,9 @@ min 和 max 先把規則切成名稱和數字，再依照值的 Kind 算出要�
 規則寫錯的時候，例如 min=abc，我們選擇 panic 而不是傳回 error。第 6 章的指導方針說過：這是寫程式的人的錯誤，不是使用者的錯誤，應該在開發階段就讓它爆出來。
 -->
 
+---
+class: code-sm
+zoom: 0.94
 ---
 
 # GoShop 第 19 步：解題提示（續 3）
@@ -1098,21 +1108,16 @@ API 的 writeErr 也加了一個 case：錯誤鏈裡有 *FieldError 的時候回
 
 # GoShop 完成了！
 
-```text
-goshop/                            2,700 行 Go，10 個套件，全部有測試
-├── main.go、doc.go、Makefile      命令列、伺服器、版本、跨平台編譯
-└── internal/
-    ├── money/      金額與千分位（Stringer、Example）              Ch 5、7、9、17
-    ├── shop/       商品、訂單、錯誤、時區（JSON／Text 標籤）        Ch 4、6、10、11
-    ├── checkout/   購物車、折扣、折價券、結帳與付款                Ch 5、8、10、16
-    ├── payment/    付款方式介面                                  Ch 7
-    ├── store/      Store 介面：記憶體＋gob、MySQL、CSV            Ch 11～13、16
-    ├── rates/      匯率 API 客戶端                               Ch 14
-    ├── webhook/    POST 通知、背景 worker pool                   Ch 14、16
-    ├── web/        RESTful API、後台模板、登入                    Ch 15、18
-    ├── auth/       bcrypt、HMAC 簽章憑證                          Ch 18
-    └── validate/   反射驗證器                                    Ch 19
-```
+約 2,700 行 Go 程式碼、10 個套件，每個套件都有測試；`main.go` 負責命令列與伺服器
+
+| 套件 | 功能 | 用到的章節 |
+| --- | --- | --- |
+| `money`、`shop` | 金額、商品、訂單、錯誤、時區、JSON 標籤 | Ch 4 ～ 7、10、11 |
+| `checkout`、`payment` | 購物車、折扣、折價券、結帳、付款介面 | Ch 5、7、8、10 |
+| `store` | `Store` 介面：記憶體 + gob、MySQL、CSV | Ch 11 ～ 13、16 |
+| `rates`、`webhook` | 匯率 API、POST 通知、背景 worker pool | Ch 14、16 |
+| `web`、`auth` | RESTful API、後台網頁、登入、HTTPS | Ch 15、18 |
+| `validate` | 反射驗證器 | Ch 19 |
 
 - **unsafe** 沒有出現在 GoShop 裡：一般的應用程式**不需要**它，這正是本章的結論
 
@@ -1121,7 +1126,7 @@ goshop/                            2,700 行 Go，10 個套件，全部有測試
 
 從第 0 章的一行 Println 開始，GoShop 現在有兩千七百行 Go 程式碼、十個套件，每個套件都有測試。它可以用命令列操作、可以當網站服務、可以接 MySQL、可以處理很多人同時搶購，還有登入和 HTTPS。
 
-右邊標註了每個套件用到的章節，大家可以看到，幾乎每一章的內容都在這個專案裡留下了痕跡。
+表格的最後一欄標註了每個套件用到的章節，大家可以看到，幾乎每一章的內容都在這個專案裡留下了痕跡。
 
 大家可能發現，今天的 unsafe 沒有用在 GoShop 裡。這不是忘記了，而是刻意的：unsafe 是給標準函式庫和極少數效能關鍵的程式用的，一般的應用程式完全不需要它。知道什麼時候不該用一個工具，跟知道怎麼用它一樣重要。
 

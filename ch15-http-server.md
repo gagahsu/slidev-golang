@@ -1531,6 +1531,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.91
+---
 
 # GoShop 第 15 步：API 與後台網頁
 ### 任務說明
@@ -1566,12 +1568,14 @@ $ curl -i -X POST localhost:8080/api/orders \
 HTTP/1.1 201 Created
 Location: /api/orders/1
 {"id":1,"lines":[…],"subtotal":900,"discount":135,"total":765,
- "status":"pending","coupon":"WEEK15","created_at":"2026-09-24T15:19:07+08:00",…}
+ "status":"pending","coupon":"WEEK15",…}
 
-$ curl -X POST localhost:8080/api/orders/1/pay -d '{"method":"card","last4":"4242"}'
+$ curl -X POST localhost:8080/api/orders/1/pay \
+    -d '{"method":"card","last4":"4242"}'
 {"id":1,…,"status":"paid","paid_by":"信用卡 *4242",…}
 
-$ curl -X POST localhost:8080/api/orders -d '{"items":[{"sku":"SKU-003","qty":99}]}'
+$ curl -X POST localhost:8080/api/orders \
+    -d '{"items":[{"sku":"SKU-003","qty":99}]}'
 {"error":"結帳失敗：SKU-003 庫存不足：想買 99 件，只剩 5 件"}
 ```
 
@@ -1597,6 +1601,9 @@ $ curl -X POST localhost:8080/api/orders -d '{"items":[{"sku":"SKU-003","qty":99
 整個頁面只用了 html/template 和一個很短的 CSS 檔，沒有任何前端框架。對後台管理這種內部工具來說，這樣就已經很夠用了。
 -->
 
+---
+class: code-sm
+zoom: 0.91
 ---
 
 # GoShop 第 15 步：解題提示
@@ -1638,6 +1645,8 @@ templates 和 static 兩個資料夾用 go:embed 嵌入成一個 embed.FS。模�
 -->
 
 ---
+class: code-sm
+---
 
 # GoShop 第 15 步：解題提示（續）
 ### 依錯誤種類決定狀態碼
@@ -1672,6 +1681,9 @@ default 的情況是我們沒預料到的錯誤，例如資料庫斷線。這時
 -->
 
 ---
+class: code-sm
+zoom: 0.92
+---
 
 # GoShop 第 15 步：解題提示（續 2）
 ### 處理器：解碼 JSON、回傳 201
@@ -1680,7 +1692,8 @@ default 的情況是我們沒預料到的錯誤，例如資料庫斷線。這時
 // goshop/internal/web/api.go
 func (s *Server) createOrder(w http.ResponseWriter, r *http.Request) {
 	var cart checkout.Cart
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)) // 最多 1 MB
+	// 請求內容最多 1 MB，避免超大的請求吃光記憶體
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&cart); err != nil {
 		writeError(w, http.StatusBadRequest, "JSON 格式錯誤："+err.Error())
@@ -1710,6 +1723,8 @@ MaxBytesReader 限制請求最多 1 MB，避免有人送一個超大的請求把
 -->
 
 ---
+class: code-sm
+---
 
 # GoShop 第 15 步：解題提示（續 3）
 ### 後台模板與表單
@@ -1718,7 +1733,8 @@ MaxBytesReader 限制請求最多 1 MB，避免有人送一個超大的請求把
 <!-- goshop/internal/web/templates/admin.html -->
     {{range .Products}}
     <tr class="{{if lt .Stock 5}}low{{end}}">
-      <td>{{.SKU}}</td><td>{{.Name}}</td><td>{{.Price}}</td><td>{{.Stock}}</td>
+      <td>{{.SKU}}</td><td>{{.Name}}</td>
+      <td>{{.Price}}</td><td>{{.Stock}}</td>
     </tr>
     {{end}}
 ```
@@ -1745,6 +1761,8 @@ MaxBytesReader 限制請求最多 1 MB，避免有人送一個超大的請求把
 -->
 
 ---
+zoom: 0.97
+---
 
 # GoShop 第 15 步：解題提示（續 4）
 ### 啟動伺服器與優雅關閉
@@ -1767,7 +1785,8 @@ MaxBytesReader 限制請求最多 1 MB，避免有人送一個超大的請求把
 	case <-ctx.Done():
 	}
 	slog.Info("收到結束訊號，關閉伺服器中…")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(
+		context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx) // 等進行中的請求處理完才關閉
 ```

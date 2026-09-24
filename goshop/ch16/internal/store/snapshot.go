@@ -31,7 +31,8 @@ type snapshot struct {
 func (m *Memory) Save(w io.Writer) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return gob.NewEncoder(w).Encode(snapshot{m.products, m.orders, m.lastID})
+	snap := snapshot{m.products, m.orders, m.lastID}
+	return gob.NewEncoder(w).Encode(snap)
 }
 
 // Load 從 gob 格式讀回所有商品與訂單。

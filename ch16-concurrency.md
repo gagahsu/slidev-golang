@@ -1433,6 +1433,8 @@ Read at 0x00c0001649f0 by goroutine 13:
 -->
 
 ---
+zoom: 0.97
+---
 
 # GoShop 第 16 步：解題提示
 ### 讀寫鎖：RLock 與 Lock
@@ -1450,7 +1452,8 @@ type Memory struct {
 
 // ...
 // Product 用 SKU 查詢一項商品。
-func (m *Memory) Product(ctx context.Context, sku string) (shop.Product, error) {
+func (m *Memory) Product(
+	ctx context.Context, sku string) (shop.Product, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.product(sku)
@@ -1468,6 +1471,8 @@ RWMutex 是讀寫鎖：查詢商品這種只讀的操作用 RLock，多個 gorou
 注意 Product 分成兩個版本：大寫的 Product 會加鎖，給外面呼叫；小寫的 product 不加鎖，給已經持有鎖的方法在內部使用。為什麼要這樣？下一頁說明。
 -->
 
+---
+class: code-sm
 ---
 
 # GoShop 第 16 步：解題提示（續）
@@ -1504,6 +1509,8 @@ Go 的鎖不可重入，同一個 goroutine 也不能重複取得。這是今天
 -->
 
 ---
+zoom: 0.91
+---
 
 # GoShop 第 16 步：解題提示（續 2）
 ### 100 人搶 10 件：並行測試
@@ -1514,7 +1521,8 @@ Go 的鎖不可重入，同一個 goroutine 也不能重複取得。這是今天
 	var wg sync.WaitGroup
 	for range 100 {
 		wg.Go(func() {
-			o := shop.Order{Lines: []shop.Line{{SKU: "HOT", Name: "限量款", Qty: 1}}}
+			line := shop.Line{SKU: "HOT", Name: "限量款", Qty: 1}
+			o := shop.Order{Lines: []shop.Line{line}}
 			err := st.PlaceOrder(ctx, &o)
 			switch {
 			case err == nil:
@@ -1530,7 +1538,7 @@ Go 的鎖不可重入，同一個 goroutine 也不能重複取得。這是今天
 ```
 
 ```text
-$ GOSHOP_TEST_DSN=… go test -race -run 'TestMemory|TestMySQL' ./internal/store
+$ go test -race -run 'TestMemory|TestMySQL' ./internal/store
 ok      goshop/internal/store   1.128s
 ```
 
@@ -1542,6 +1550,9 @@ wg.Wait 等全部結束之後，檢查成功 10 人、售完 90 人、庫存剛�
 最棒的是，這個測試放在第 13 章的合約測試 testStore 裡面，所以記憶體版和 MySQL 版都要通過。MySQL 版不需要鎖，靠的是交易和 stock >= ? 的條件，一樣通過了。
 -->
 
+---
+class: code-sm
+zoom: 0.97
 ---
 
 # GoShop 第 16 步：解題提示（續 3）
@@ -1578,6 +1589,8 @@ NewNotifier 啟動 4 個 worker goroutine，每個 worker 都用 for range 從�
 每次送出都用 context.WithTimeout 設定 10 秒的上限，送完馬上呼叫 cancel 釋放資源。這裡不能用 defer，因為 worker 是一個長時間執行的迴圈，defer 要等整個函式結束才會執行。
 -->
 
+---
+zoom: 0.91
 ---
 
 # GoShop 第 16 步：解題提示（續 4）

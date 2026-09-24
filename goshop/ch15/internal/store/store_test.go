@@ -64,7 +64,7 @@ func TestMemory(t *testing.T) {
 }
 
 // 設定環境變數才會執行，例如：
-// GOSHOP_TEST_DSN="gouser:gopass@tcp(127.0.0.1:3306)/goshop_test" go test ./...
+// export GOSHOP_TEST_DSN="gouser:gopass@tcp(127.0.0.1:3306)/goshop_test"
 func TestMySQL(t *testing.T) {
 	dsn := os.Getenv("GOSHOP_TEST_DSN")
 	if dsn == "" {

@@ -36,9 +36,9 @@ type latest struct {
 	Rates  map[string]float64 `json:"rates"`
 }
 
-// Rate 查詢 1 單位的 base 可以換成多少 target，例如 TWD → USD。
-func (c *Client) Rate(ctx context.Context, base, target string) (float64, error) {
-	u := c.BaseURL + "/latest/" + url.PathEscape(base)
+// Rate 查詢 1 單位的 from 可以換成多少 to，例如 TWD → USD。
+func (c *Client) Rate(ctx context.Context, from, to string) (float64, error) {
+	u := c.BaseURL + "/latest/" + url.PathEscape(from)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return 0, err
@@ -59,9 +59,9 @@ func (c *Client) Rate(ctx context.Context, base, target string) (float64, error)
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		return 0, fmt.Errorf("解析匯率：%w", err)
 	}
-	rate, ok := data.Rates[target]
+	rate, ok := data.Rates[to]
 	if data.Result != "success" || !ok {
-		return 0, fmt.Errorf("查不到 %s → %s 的匯率", base, target)
+		return 0, fmt.Errorf("查不到 %s → %s 的匯率", from, to)
 	}
 	return rate, nil
 }

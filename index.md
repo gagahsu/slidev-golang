@@ -86,7 +86,7 @@ style: |
   <p style="color: #5eada0; font-size: 1rem; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 1rem;">Go Programming Masterclass</p>
   <h1 style="color: #1a5c5c; font-size: 2.8rem; font-weight: 900; line-height: 1.2; margin-bottom: 0.5rem;">Go 實戰開發・課程目錄</h1>
   <div style="height: 4px; width: 240px; background: linear-gradient(90deg, #5eada0, #a7d9d0); border-radius: 2px; margin-bottom: 0.5rem;"></div>
-  <p style="color: #9dc4c4; font-size: 0.9rem; margin-bottom: 0;">點擊章節卡片開始學習｜範例以 Go 1.27 撰寫並驗證</p>
+  <p style="color: #9dc4c4; font-size: 0.9rem; margin-bottom: 0;">點擊章節卡片開始學習｜範例以 Go 1.27 撰寫並驗證｜每章實作課程專案 GoShop</p>
   <div class="chapter-grid">
     <Link to="ch00" class="chapter-card">
       <div class="chapter-num">Ch 0</div>

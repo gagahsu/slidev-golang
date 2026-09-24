@@ -16,7 +16,7 @@ type Event struct {
 }
 
 // Send 把事件編碼成 JSON，POST 到 url；回應不是 2xx 就視為失敗。
-func Send(ctx context.Context, client *http.Client, url string, e Event) error {
+func Send(ctx context.Context, c *http.Client, url string, e Event) error {
 	body, err := json.Marshal(e)
 	if err != nil {
 		return err
@@ -28,7 +28,7 @@ func Send(ctx context.Context, client *http.Client, url string, e Event) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := client.Do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return fmt.Errorf("送出 %s：%w", e.Type, err)
 	}

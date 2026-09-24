@@ -15,7 +15,8 @@
     <tr><th>SKU</th><th>品名</th><th>單價</th><th>庫存</th></tr>
     {{range .Products}}
     <tr class="{{if lt .Stock 5}}low{{end}}">
-      <td>{{.SKU}}</td><td>{{.Name}}</td><td>{{.Price}}</td><td>{{.Stock}}</td>
+      <td>{{.SKU}}</td><td>{{.Name}}</td>
+      <td>{{.Price}}</td><td>{{.Stock}}</td>
     </tr>
     {{end}}
   </table>

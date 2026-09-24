@@ -632,6 +632,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.83
+---
 
 # GoShop 的成長路線（Ch 0 ～ 9）
 
@@ -656,6 +658,8 @@ class: flex flex-col justify-center items-center text-center
 到第 8 章，main.go 會長到快 300 行，這時候我們就會很有感覺：「這個檔案太大了，應該要拆開」，剛好就是學套件的最好時機。第 9 章則會替它寫單元測試，而且測試還會幫我們抓到一個真正的 bug。
 -->
 
+---
+zoom: 0.83
 ---
 
 # GoShop 的成長路線（Ch 10 ～ 19）

@@ -52,7 +52,8 @@ func check(rv reflect.Value, prefix string) []error {
 		if fv.Kind() == reflect.Slice { // 切片裡的結構也要檢查
 			for i := range fv.Len() {
 				if elem := reflect.Indirect(fv.Index(i)); elem.Kind() == reflect.Struct {
-					errs = append(errs, check(elem, fmt.Sprintf("%s[%d].", name, i))...)
+					sub := fmt.Sprintf("%s[%d].", name, i)
+					errs = append(errs, check(elem, sub)...)
 				}
 			}
 		}
@@ -80,7 +81,8 @@ func ok(v reflect.Value, rule string) bool {
 	}
 	var size int64
 	switch v.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+	case reflect.Int, reflect.Int8, reflect.Int16,
+		reflect.Int32, reflect.Int64:
 		size = v.Int()
 	case reflect.String:
 		size = int64(utf8.RuneCountInString(v.String()))

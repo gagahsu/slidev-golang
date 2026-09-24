@@ -830,6 +830,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.98
+---
 
 # GoShop 第 8 步：拆成多個套件
 ### 任務說明
@@ -888,6 +890,8 @@ checkout 套件有三個檔案，它們的第一行都是 package checkout，屬
 -->
 
 ---
+zoom: 0.91
+---
 
 # GoShop 第 8 步：解題提示
 ### 匯出的名稱：大寫開頭
@@ -927,6 +931,8 @@ Money、Times、String 都是大寫開頭，所以其他套件可以使用。
 在 shop 套件裡，就要寫 money.Money 來使用它，也就是「套件名稱.名稱」。Product 的欄位也全部大寫開頭，其他套件才能讀寫這些欄位。
 -->
 
+---
+zoom: 0.97
 ---
 
 # GoShop 第 8 步：解題提示（續）
@@ -998,6 +1004,8 @@ Service 把結帳需要的東西都放在欄位裡：用哪個 Store、有哪些
 這裡的 Store 欄位型別是 *store.Memory，也就是寫死了一定要用記憶體版本。第 13 章換成 MySQL 的時候，我們會把它改成介面，到時候就會看到介面的好處。
 -->
 
+---
+zoom: 0.88
 ---
 
 # GoShop 第 8 步：解題提示（續 3）

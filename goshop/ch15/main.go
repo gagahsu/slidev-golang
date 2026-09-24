@@ -207,7 +207,8 @@ func serve(st store.Store, addr string) error {
 	case <-ctx.Done():
 	}
 	slog.Info("收到結束訊號，關閉伺服器中…")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(
+		context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx) // 等進行中的請求處理完才關閉
 }

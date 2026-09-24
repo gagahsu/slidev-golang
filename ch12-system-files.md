@@ -1422,6 +1422,8 @@ flag.StringVar 和 flag.String 的差別是：StringVar 把旗標綁定到一個
 -->
 
 ---
+zoom: 0.97
+---
 
 # GoShop 第 12 步：解題提示（續）
 ### 依旗標決定要做什麼
@@ -1459,6 +1461,8 @@ MkdirAll 建立資料夾，權限是八進位的 0o700，也就是擁有者可�
 -->
 
 ---
+zoom: 0.97
+---
 
 # GoShop 第 12 步：解題提示（續 2）
 ### 讀取 CSV：記住行號
@@ -1495,6 +1499,8 @@ func ReadProductsCSV(r io.Reader) ([]shop.Product, error) {
 錯誤訊息的行號是 i 加 1，因為切片的索引從 0 開始，但人在看檔案的時候是從第 1 行開始數。這種小細節，就是好用和不好用的差別。
 -->
 
+---
+zoom: 0.94
 ---
 
 # GoShop 第 12 步：解題提示（續 3）

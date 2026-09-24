@@ -1490,6 +1490,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.94
+---
 
 # GoShop 第 1 步：解題提示
 ### 常數、列舉與指標

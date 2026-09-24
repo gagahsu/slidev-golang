@@ -827,6 +827,8 @@ Makefile 把常用的指令集中起來。以後提交程式碼之前，只要�
 -->
 
 ---
+class: code-sm
+---
 
 # GoShop 第 17 步：解題提示
 ### 注入版本號與跨平台編譯
@@ -862,6 +864,8 @@ Makefile 的 VERSION 預設用 git describe 取得最近的 Git 標籤，所以�
 release 用迴圈把三個平台都編譯一次。GOOS 和 GOARCH 決定目標平台，CGO_ENABLED=0 確保是純 Go 的靜態執行檔。我們用的 MySQL 驅動、bcrypt 都是純 Go 寫的，所以可以放心關掉 cgo。Makefile 裡的錢字號要寫兩個，才能傳給 shell。
 -->
 
+---
+zoom: 0.94
 ---
 
 # GoShop 第 17 步：解題提示（續）

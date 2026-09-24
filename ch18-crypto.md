@@ -1339,7 +1339,8 @@ class: flex flex-col justify-center items-center text-center
 5. `-tls-cert`、`-tls-key`：改用 HTTPS，**最低 TLS 1.3**
 
 ```bash
-export GOSHOP_ADMIN_HASH=$(echo 'goshop-admin' | go run . -hash-password)
+echo 'goshop-admin' | go run . -hash-password   # 印出 bcrypt 雜湊
+export GOSHOP_ADMIN_HASH='$2a$10$xpeieGHIjk…'   # 貼上剛剛的結果
 go run $(go env GOROOT)/src/crypto/tls/generate_cert.go \
     -host localhost,127.0.0.1 -ecdsa-curve P256
 go run . -http :8443 -tls-cert cert.pem -tls-key key.pem
@@ -1356,6 +1357,8 @@ go run . -http :8443 -tls-cert cert.pem -tls-key key.pem
 -->
 
 ---
+class: code-sm
+---
 
 # GoShop 第 18 步：解題提示
 ### bcrypt 與 HMAC 簽章憑證
@@ -1364,7 +1367,8 @@ go run . -http :8443 -tls-cert cert.pem -tls-key key.pem
 // goshop/internal/auth/auth.go
 // CheckPassword 比對密碼是否正確。
 func (a *Auth) CheckPassword(password string) bool {
-	return bcrypt.CompareHashAndPassword(a.PasswordHash, []byte(password)) == nil
+	err := bcrypt.CompareHashAndPassword(a.PasswordHash, []byte(password))
+	return err == nil
 }
 
 // NewToken 產生「到期時間.簽章」格式的憑證，例如 1790000000.q7Xk…
@@ -1388,6 +1392,8 @@ NewToken 產生登入憑證，格式是「到期時間點簽章」。到期時�
 有人想把到期時間改成 9999999999 讓自己永遠登入？沒用，因為他算不出新的簽章，他沒有金鑰。
 -->
 
+---
+zoom: 0.79
 ---
 
 # GoShop 第 18 步：解題提示（續）
@@ -1426,6 +1432,8 @@ Verify 先用 strings.Cut 把憑證切成到期時間和簽章兩段，再用同
 -->
 
 ---
+class: code-sm
+---
 
 # GoShop 第 18 步：解題提示（續 2）
 ### 登入中介軟體與安全的 cookie
@@ -1461,6 +1469,8 @@ cookie 的三個安全設定：HttpOnly 讓網頁上的 JavaScript 讀不到它�
 -->
 
 ---
+zoom: 0.88
+---
 
 # GoShop 第 18 步：解題提示（續 3）
 ### HTTPS：TLS 1.3
@@ -1484,10 +1494,13 @@ cookie 的三個安全設定：HttpOnly 讓網頁上的 JavaScript 讀不到它�
 ```
 
 ```text
-$ curl --cacert cert.pem https://localhost:8443/admin        → 303 導向 /login
-$ curl --cacert cert.pem -d password=goshop-admin https://localhost:8443/login
-Set-Cookie: goshop_admin=1790263391.u…; HttpOnly; Secure; SameSite=Lax
-$ curl --tls-max 1.2 --cacert cert.pem https://localhost:8443/  → 連線失敗
+$ curl --cacert cert.pem https://localhost:8443/admin
+→ 303 導向 /login
+$ curl --cacert cert.pem -d password=goshop-admin \
+    https://localhost:8443/login
+→ Set-Cookie: goshop_admin=1790263391.u…; HttpOnly; Secure
+$ curl --tls-max 1.2 --cacert cert.pem https://localhost:8443/
+→ 連線失敗（伺服器只接受 TLS 1.3）
 ```
 
 <!--

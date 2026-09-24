@@ -42,7 +42,8 @@ func (m *Memory) Products(ctx context.Context) ([]shop.Product, error) {
 }
 
 // Product 用 SKU 查詢一項商品。
-func (m *Memory) Product(ctx context.Context, sku string) (shop.Product, error) {
+func (m *Memory) Product(
+	ctx context.Context, sku string) (shop.Product, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.product(sku)

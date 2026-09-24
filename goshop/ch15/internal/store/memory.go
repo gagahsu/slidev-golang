@@ -37,7 +37,8 @@ func (m *Memory) Products(ctx context.Context) ([]shop.Product, error) {
 }
 
 // Product 用 SKU 查詢一項商品。
-func (m *Memory) Product(ctx context.Context, sku string) (shop.Product, error) {
+func (m *Memory) Product(
+	ctx context.Context, sku string) (shop.Product, error) {
 	p, ok := m.products[sku]
 	if !ok {
 		return shop.Product{}, fmt.Errorf("商品 %s：%w", sku, shop.ErrNotFound)

@@ -61,7 +61,8 @@ func (s *Server) getProduct(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) createOrder(w http.ResponseWriter, r *http.Request) {
 	var cart checkout.Cart
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)) // 最多 1 MB
+	// 請求內容最多 1 MB，避免超大的請求吃光記憶體
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&cart); err != nil {
 		writeError(w, http.StatusBadRequest, "JSON 格式錯誤："+err.Error())

@@ -1098,7 +1098,7 @@ SKU-003  NT$1,280   庫存   5  手沖壺（約 40.00 USD）
 -->
 
 ---
-zoom: 0.9
+class: code-sm
 ---
 
 # GoShop 第 14 步：解題提示
@@ -1106,9 +1106,9 @@ zoom: 0.9
 
 ```go
 // goshop/internal/rates/rates.go
-// Rate 查詢 1 單位的 base 可以換成多少 target，例如 TWD → USD。
-func (c *Client) Rate(ctx context.Context, base, target string) (float64, error) {
-	u := c.BaseURL + "/latest/" + url.PathEscape(base)
+// Rate 查詢 1 單位的 from 可以換成多少 to，例如 TWD → USD。
+func (c *Client) Rate(ctx context.Context, from, to string) (float64, error) {
+	u := c.BaseURL + "/latest/" + url.PathEscape(from)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return 0, err
@@ -1156,9 +1156,9 @@ type latest struct {
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		return 0, fmt.Errorf("解析匯率：%w", err)
 	}
-	rate, ok := data.Rates[target]
+	rate, ok := data.Rates[to]
 	if data.Result != "success" || !ok {
-		return 0, fmt.Errorf("查不到 %s → %s 的匯率", base, target)
+		return 0, fmt.Errorf("查不到 %s → %s 的匯率", from, to)
 	}
 	return rate, nil
 }
@@ -1173,6 +1173,9 @@ rates 的幣別是不固定的，所以用 map[string]float64 來接，再用 co
 -->
 
 ---
+class: code-sm
+zoom: 0.85
+---
 
 # GoShop 第 14 步：解題提示（續 2）
 ### POST 送出 JSON：webhook
@@ -1180,7 +1183,7 @@ rates 的幣別是不固定的，所以用 map[string]float64 來接，再用 co
 ```go
 // goshop/internal/webhook/webhook.go
 // Send 把事件編碼成 JSON，POST 到 url；回應不是 2xx 就視為失敗。
-func Send(ctx context.Context, client *http.Client, url string, e Event) error {
+func Send(ctx context.Context, c *http.Client, url string, e Event) error {
 	body, err := json.Marshal(e)
 	if err != nil {
 		return err
@@ -1192,7 +1195,7 @@ func Send(ctx context.Context, client *http.Client, url string, e Event) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := client.Do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return fmt.Errorf("送出 %s：%w", e.Type, err)
 	}
@@ -1211,9 +1214,12 @@ Send 先把事件編碼成 JSON，用 bytes.NewReader 包成請求的 Body，並
 
 判斷成功的條件是狀態碼在 200 到 299 之間。對方可能回 200 OK、201 Created、204 No Content，這些都代表收到了。
 
-client 由呼叫端傳進來，這樣逾時的設定由呼叫端決定，測試時也可以換成 httptest 提供的 client。
+參數 c 是呼叫端傳進來的 *http.Client，這樣逾時的設定由呼叫端決定，測試時也可以換成 httptest 提供的 client。
 -->
 
+---
+class: code-sm
+zoom: 0.97
 ---
 
 # GoShop 第 14 步：解題提示（續 3）

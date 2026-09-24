@@ -55,3 +55,10 @@ code, pre, .shiki, .shiki * {
 }
 
 * { -webkit-user-select: text !important; user-select: text !important; }
+
+/* 程式碼行比較長的投影片：在 frontmatter 加上 class: code-sm，縮小程式碼字級
+   （zoom 只會等比例縮小，程式碼區塊一行能放的字數不會變多） */
+.slidev-layout.code-sm pre code,
+.slidev-layout.code-sm pre code .line {
+  font-size: 12px !important;
+}

@@ -857,6 +857,9 @@ SUMMER：折價券無效或已過期
 -->
 
 ---
+class: code-sm
+zoom: 0.94
+---
 
 # GoShop 第 10 步：解題提示
 ### 有效期間與工作天
@@ -894,6 +897,8 @@ ShipDate 每次往後加一天，如果這天不是週六或週日，才把剩�
 時區的部分，我們在 shop 套件宣告一個 Location 變數。為了在沒有安裝時區資料的系統（例如精簡的 Docker 映像檔）也能執行，shop 套件還 import 了 time/tzdata，把時區資料編譯進執行檔。
 -->
 
+---
+class: code-sm
 ---
 
 # GoShop 第 10 步：解題提示（續）

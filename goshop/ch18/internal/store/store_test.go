@@ -72,7 +72,8 @@ func testConcurrentOrders(t *testing.T, st Store) {
 	var wg sync.WaitGroup
 	for range 100 {
 		wg.Go(func() {
-			o := shop.Order{Lines: []shop.Line{{SKU: "HOT", Name: "限量款", Qty: 1}}}
+			line := shop.Line{SKU: "HOT", Name: "限量款", Qty: 1}
+			o := shop.Order{Lines: []shop.Line{line}}
 			err := st.PlaceOrder(ctx, &o)
 			switch {
 			case err == nil:
@@ -98,7 +99,7 @@ func TestMemory(t *testing.T) {
 }
 
 // 設定環境變數才會執行，例如：
-// GOSHOP_TEST_DSN="gouser:gopass@tcp(127.0.0.1:3306)/goshop_test" go test ./...
+// export GOSHOP_TEST_DSN="gouser:gopass@tcp(127.0.0.1:3306)/goshop_test"
 func TestMySQL(t *testing.T) {
 	dsn := os.Getenv("GOSHOP_TEST_DSN")
 	if dsn == "" {

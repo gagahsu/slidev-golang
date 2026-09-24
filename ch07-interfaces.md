@@ -1180,6 +1180,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.94
+---
 
 # GoShop 第 7 步：解題提示
 ### Money 實作 fmt.Stringer
@@ -1219,6 +1221,9 @@ Money 的底層型別是 int，所以加減乘除都可以照常使用。String 
 -->
 
 ---
+class: code-sm
+zoom: 0.91
+---
 
 # GoShop 第 7 步：解題提示（續）
 ### 付款方式介面
@@ -1256,6 +1261,9 @@ Wallet 的兩個方法都用指標接收器。所以實作 PaymentMethod 的是 
 錯誤訊息用 %w 包裝 ErrInsufficientFunds，呼叫端就能用 errors.Is 判斷是不是餘額不足。
 -->
 
+---
+class: code-sm
+zoom: 0.94
 ---
 
 # GoShop 第 7 步：解題提示（續 2）

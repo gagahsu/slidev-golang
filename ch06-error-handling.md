@@ -1181,7 +1181,8 @@ func validate(catalog map[string]Product, cart Cart) error {
 		p, ok := catalog[it.SKU]
 		switch {
 		case !ok:
-			errs = append(errs, fmt.Errorf("%s: %w", it.SKU, ErrUnknownSKU))
+			err := fmt.Errorf("%s: %w", it.SKU, ErrUnknownSKU)
+			errs = append(errs, err)
 		case p.Stock < it.Qty:
 			errs = append(errs, &StockError{it.SKU, it.Qty, p.Stock})
 		}
