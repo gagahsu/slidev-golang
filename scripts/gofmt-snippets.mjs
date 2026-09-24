@@ -29,7 +29,7 @@ for (const file of files) {
   for (const b of blocks) {
     if (b.code.startsWith(MARK) && chains.length && chains.at(-1).open) {
       chains.at(-1).parts.push(b)
-    } else if (/^\s*package \w+/.test(b.code)) {
+    } else if (/^\s*package \w+/.test(b.code.replace(/^(\s*\/\/[^\n]*\n)+/, ''))) {
       chains.push({ parts: [b], open: true })
     } else if (chains.length) {
       chains.at(-1).open = false

@@ -1,10 +1,11 @@
 // 檢查投影片裡的 Go 程式碼區塊能不能編譯（go vet）
 //
 // 規則：
-//   - 只檢查以 `package` 開頭、可獨立編譯的 ```go 區塊（片段程式碼不檢查）
+//   - 只檢查以 `package` 開頭（前面可有註解）、可獨立編譯的 ```go 區塊（片段程式碼不檢查）
 //   - 程式碼行尾有 `// 編譯錯誤` 標記者略過（刻意示範錯誤的程式碼；註解掉的行不算）
 //   - import 了第三方模組或範例模組（github.com／golang.org／gopkg.in／example.com）的區塊略過
 //   - import 了 "testing" 的區塊會存成 x_test.go
+//   - 第一行是 `// 檔名：xxx.go` 的區塊，會和同檔案上一個區塊放在同一個套件資料夾（例如程式 + 測試檔）
 //   - 第一行是 `// 續上頁` 的區塊，會接在同檔案上一個區塊後面一起檢查（跨頁的長程式）
 //
 // 用法：pnpm check:go            （檢查全部章節）
@@ -35,11 +36,13 @@ const origin = new Map()
 let count = 0
 let skipped = 0
 
-const blocks = [] // { code, where }
+const blocks = [] // { files: [{ name, code }], where }
+const skipRe = /import[\s\S]*?"(github\.com|golang\.org|gopkg\.in|example\.com)\//
+const stripComments = code => code.replace(/^(\s*\/\/[^\n]*\n)+/, '')
 
 for (const file of files) {
   const lines = readFileSync(join(root, file), 'utf8').split('\n')
-  let last = null // 同一檔案中上一個可檢查的區塊（供「續上頁」接續）
+  let last = null // 同一檔案中上一個可檢查的區塊（供「續上頁」「檔名」接續）
   for (let i = 0; i < lines.length; i++) {
     if (!/^```go\b/.test(lines[i])) continue
     const start = i + 1
@@ -47,17 +50,25 @@ for (const file of files) {
     while (end < lines.length && !/^```\s*$/.test(lines[end])) end++
     const code = lines.slice(start, end).join('\n')
     i = end
-    if (/^\s*\/\/ 續上頁/.test(code) && last) {
-      last.code += '\n\n' + code
+    if (/^\s*\/\/ 續上頁/.test(code)) {
+      if (last) last.files.at(-1).code += '\n\n' + code
       continue
     }
-    if (!/^\s*package \w+/.test(code)) continue
-    if (/^\s*[^\s/].*\/\/\s*編譯錯誤/m.test(code) || /import[\s\S]*?"(github\.com|golang\.org|gopkg\.in|example\.com)\//.test(code)) {
+    if (!/^\s*package \w+/.test(stripComments(code))) continue
+    if (/^\s*[^\s/].*\/\/\s*編譯錯誤/m.test(code) || skipRe.test(code)) {
       skipped++
       last = null
       continue
     }
-    last = { code, where: `${file}:${start}` }
+    const named = code.match(/^\/\/ 檔名：(\S+\.go)/)
+    const name = named ? named[1].split('/').pop()
+      : code.includes('"testing"') ? 'x_test.go' : 'main.go'
+    const pkgOf = c => stripComments(c).match(/^\s*package (\w+)/)?.[1]
+    if (named && last && pkgOf(last.files[0].code) === pkgOf(code) && !last.files.some(f => f.name === name)) {
+      last.files.push({ name, code }) // 同一個套件的另一個檔案（例如測試檔）
+      continue
+    }
+    last = { files: [{ name, code }], where: `${file}:${start}` }
     blocks.push(last)
   }
 }
@@ -65,8 +76,7 @@ for (const file of files) {
 for (const b of blocks) {
   const dir = `s${String(++count).padStart(4, '0')}`
   mkdirSync(join(work, dir))
-  const name = b.code.includes('"testing"') ? 'x_test.go' : 'main.go'
-  writeFileSync(join(work, dir, name), b.code + '\n')
+  for (const f of b.files) writeFileSync(join(work, dir, f.name), f.code + '\n')
   origin.set(dir, b.where)
 }
 
@@ -91,9 +101,12 @@ for (const f of unformatted) {
 // --run：實際執行每個 main 程式並印出輸出，方便對照投影片上標註的結果
 if (run) {
   for (const [dir, where] of origin) {
-    const src = readFileSync(join(work, dir, readdirSync(join(work, dir))[0]), 'utf8')
-    if (!/^package main\b/m.test(src) || !/func main\(\)/.test(src)) continue
-    const r = spawnSync('go', ['run', `./${dir}`], { cwd: work, encoding: 'utf8', timeout: 20000 })
+    const names = readdirSync(join(work, dir))
+    const src = names.map(n => readFileSync(join(work, dir, n), 'utf8')).join('\n')
+    const hasTest = names.some(n => n.endsWith('_test.go'))
+    if (!hasTest && (!/^package main\b/m.test(src) || !/func main\(\)/.test(src))) continue
+    const cmd = hasTest ? ['test', '-v', `./${dir}`] : ['run', `./${dir}`]
+    const r = spawnSync('go', cmd, { cwd: work, encoding: 'utf8', timeout: 60000 })
     console.log(`\n── ${where}`)
     console.log((r.stdout + r.stderr).trimEnd())
   }
