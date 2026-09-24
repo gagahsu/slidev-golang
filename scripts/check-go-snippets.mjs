@@ -2,6 +2,7 @@
 //
 // 規則：
 //   - 只檢查以 `package` 開頭（前面可有註解）、可獨立編譯的 ```go 區塊（片段程式碼不檢查）
+//   - 區塊前一行有 `<!-- check:skip -->` 的區塊略過（例如刻意示範 go vet 警告）
 //   - 有 `// 編譯錯誤` 標記（行尾或獨立一行）的區塊略過（刻意示範錯誤的程式碼；註解掉的程式碼行不算）
 //   - import 了第三方模組或範例模組（github.com／golang.org／gopkg.in／example.com）的區塊略過
 //   - import 了 "testing" 的區塊會存成 x_test.go
@@ -54,6 +55,9 @@ for (const file of files) {
   for (let i = 0; i < lines.length; i++) {
     if (!/^```go\b/.test(lines[i])) continue
     const start = i + 1
+    let prev = i - 1
+    while (prev >= 0 && lines[prev].trim() === '') prev--
+    const skipMarked = prev >= 0 && lines[prev].includes('check:skip') // 刻意示範 go vet 警告等情況
     let end = start
     while (end < lines.length && !/^```\s*$/.test(lines[end])) end++
     const code = lines.slice(start, end).join('\n')
@@ -63,7 +67,7 @@ for (const file of files) {
       continue
     }
     if (!/^\s*package \w+/.test(stripComments(code))) continue
-    if (/^\s*([^\s/].*)?\/\/\s*編譯錯誤/m.test(code) || skipRe.test(code)) {
+    if (skipMarked || /^\s*([^\s/].*)?\/\/\s*編譯錯誤/m.test(code) || skipRe.test(code)) {
       skipped++
       last = null
       continue
