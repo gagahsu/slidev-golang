@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <title>GoShop 後台</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <h1>GoShop 後台</h1>
+  {{with .Error}}<p class="error">{{.}}</p>{{end}}
+
+  <h2>商品</h2>
+  <table>
+    <tr><th>SKU</th><th>品名</th><th>單價</th><th>庫存</th></tr>
+    {{range .Products}}
+    <tr class="{{if lt .Stock 5}}low{{end}}">
+      <td>{{.SKU}}</td><td>{{.Name}}</td><td>{{.Price}}</td><td>{{.Stock}}</td>
+    </tr>
+    {{end}}
+  </table>
+
+  <form method="post" action="/admin/products">
+    <input name="sku" placeholder="SKU" required>
+    <input name="name" placeholder="品名" required>
+    <input name="price" type="number" min="1" placeholder="單價" required>
+    <input name="stock" type="number" min="0" placeholder="庫存" required>
+    <button>新增／更新商品</button>
+  </form>
+
+  <h2>訂單</h2>
+  <table>
+    <tr><th>編號</th><th>下單時間</th><th>品項</th><th>金額</th><th>狀態</th></tr>
+    {{range .Orders}}
+    <tr>
+      <td>#{{.ID}}</td><td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
+      <td>{{len .Lines}}</td><td>{{.Total}}</td><td>{{.Status}}</td>
+    </tr>
+    {{else}}
+    <tr><td colspan="5">目前還沒有訂單</td></tr>
+    {{end}}
+  </table>
+</body>
+</html>

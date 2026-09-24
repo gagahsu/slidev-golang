@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <title>GoShop 後台登入</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <h1>GoShop 後台登入</h1>
+  {{with .}}<p class="error">{{.}}</p>{{end}}
+  <form method="post" action="/login">
+    <input name="password" type="password" placeholder="管理員密碼" required autofocus>
+    <button>登入</button>
+  </form>
+</body>
+</html>

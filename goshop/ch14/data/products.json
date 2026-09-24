@@ -1,0 +1,6 @@
+[
+  {"sku": "SKU-001", "name": "衣索比亞咖啡豆", "price": 450, "stock": 20},
+  {"sku": "SKU-002", "name": "濾掛咖啡（10入）", "price": 280, "stock": 50},
+  {"sku": "SKU-003", "name": "手沖壺", "price": 1280, "stock": 5},
+  {"sku": "SKU-004", "name": "馬克杯", "price": 350, "stock": 30}
+]

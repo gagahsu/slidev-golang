@@ -28,6 +28,7 @@
     "export:all": "node scripts/export-all.mjs",
     "check:go": "node scripts/check-go-snippets.mjs",
     "fmt:go": "node scripts/gofmt-snippets.mjs",
+    "check:project": "node scripts/check-project.mjs",
     "check:width": "python3 scripts/check-line-width.py",
     "check:overflow": "node scripts/check-overflow.mjs"
   },

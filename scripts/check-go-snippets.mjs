@@ -8,6 +8,7 @@
 //   - import 了 "testing" 的區塊會存成 x_test.go
 //   - 第一行是 `// 檔名：xxx.go` 的區塊，會和同檔案中前一個「也有檔名」的區塊放在同一個套件資料夾（多檔案專案、程式 + 測試檔）
 //   - 第一行是 `// 續上頁` 的區塊，會接在同檔案上一個區塊後面一起檢查（跨頁的長程式）
+//   - 第一行是 `// goshop/…` 的區塊是 GoShop 專案的摘錄，不在這裡檢查（見 check-project.mjs）
 //
 // 用法：pnpm check:go            （檢查全部章節）
 //       pnpm check:go ch05       （只檢查 ch05）
@@ -62,6 +63,10 @@ for (const file of files) {
     while (end < lines.length && !/^```\s*$/.test(lines[end])) end++
     const code = lines.slice(start, end).join('\n')
     i = end
+    if (/^\/\/ goshop\//.test(code)) { // GoShop 專案摘錄：由 check-project.mjs 對照 goshop/ 資料夾檢查
+      last = null
+      continue
+    }
     if (/^\s*\/\/ 續上頁/.test(code)) {
       if (last?.files) last.files.at(-1).code += (code.startsWith('\t') ? '\n' : '\n\n') + code // 以 Tab 縮排的續上頁：函式本體中途接續
       continue

@@ -1,0 +1,9 @@
+body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; color: #1f2937; }
+h1 { color: #1a5c5c; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+th, td { padding: .4rem .6rem; border-bottom: 1px solid #d1d5db; text-align: left; }
+th { background: #a7d9d0; }
+tr.low td { color: #b91c1c; } /* 庫存少於 5 件用紅字提醒 */
+form { display: flex; gap: .5rem; flex-wrap: wrap; }
+button { background: #5eada0; color: white; border: 0; padding: .4rem 1rem; }
+.error { color: #b91c1c; font-weight: bold; }

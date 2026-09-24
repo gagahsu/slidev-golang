@@ -36,3 +36,8 @@ desktop.ini
 
 # --- Go snippet check scratch ---
 .snippet-check/
+
+# --- GoShop 專案執行時產生的檔案 ---
+goshop/*/data/goshop.gob
+goshop/*/data/orders.log
+goshop/*/bin/

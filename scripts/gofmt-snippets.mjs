@@ -27,7 +27,9 @@ for (const file of files) {
   // 組成「鏈」：package 區塊 + 後續的續上頁區塊
   const chains = []
   for (const b of blocks) {
-    if (b.code.trimStart().startsWith(MARK) && chains.length && chains.at(-1).open) {
+    if (b.code.startsWith('// goshop/')) { // GoShop 專案摘錄：程式碼以 goshop/ 資料夾為準
+      if (chains.length) chains.at(-1).open = false
+    } else if (b.code.trimStart().startsWith(MARK) && chains.length && chains.at(-1).open) {
       chains.at(-1).parts.push(b)
     } else if (/^\s*package \w+/.test(b.code.replace(/^(\s*\/\/[^\n]*\n)+/, ''))) {
       chains.push({ parts: [b], open: true })
