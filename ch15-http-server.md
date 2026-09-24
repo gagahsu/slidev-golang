@@ -340,6 +340,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.85
+---
 
 # 查詢參數與路徑參數
 

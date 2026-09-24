@@ -95,6 +95,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.96
+---
 
 # 使用 go build
 
@@ -202,6 +204,8 @@ package config
 -->
 
 ---
+zoom: 0.92
+---
 
 # 如何針對跨平台編譯
 
@@ -285,6 +289,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.92
+---
 
 # gofmt：統一的程式碼格式
 
@@ -355,6 +361,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.79
+---
 
 # go vet：找出可疑的程式碼
 
@@ -423,6 +431,8 @@ $ go vet .
 所以一個好習慣是：commit 之前跑一次 go vet ./...，或是在 CI 裡自動執行。
 -->
 
+---
+zoom: 0.93
 ---
 
 # 補充：更完整的檢查工具 — staticcheck 與 golangci-lint
@@ -499,6 +509,8 @@ class: flex flex-col justify-center items-center text-center
 接下來是文件：怎麼查詢文件、怎麼替自己的程式碼寫文件。
 -->
 
+---
+zoom: 0.95
 ---
 
 # go doc：在終端機查詢文件
@@ -690,6 +702,8 @@ layout: default
 實務上，這些步驟通常會寫成一個 Makefile 或 CI 腳本自動執行，每次 push 程式碼都會跑一遍。
 -->
 
+---
+zoom: 0.79
 ---
 
 # 綜合練習：解題提示
