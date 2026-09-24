@@ -1,0 +1,27 @@
+{
+  "name": "slidev-golang",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "slidev index.md",
+    "build": "slidev build index.md",
+    "ch00": "slidev ch00-setup.md",
+    "ch01": "slidev ch01-variables-operators.md",
+    "ch16": "slidev ch16-concurrency.md",
+    "export:all": "node scripts/export-all.mjs",
+    "check:go": "node scripts/check-go-snippets.mjs"
+  },
+  "dependencies": {
+    "@slidev/cli": "^52.14.2",
+    "@slidev/theme-default": "latest",
+    "slidev-theme-penguin": "^2.3.1",
+    "vue": "^3.5.29"
+  },
+  "devDependencies": {
+    "@iconify-json/carbon": "^1.2.20",
+    "@iconify-json/logos": "^1.2.11",
+    "@iconify-json/mdi": "^1.2.3",
+    "pdf-lib": "^1.17.1",
+    "playwright-chromium": "^1.59.1"
+  }
+}

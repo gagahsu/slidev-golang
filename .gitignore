@@ -1,0 +1,38 @@
+# --- Dependencies ---
+node_modules/
+.pnpm-debug.log*
+
+# --- Slidev / Vite Specific ---
+dist/
+.vite-inspect/
+.remote-assets/
+components.d.ts
+screenshots/
+pdf/
+slides-export/
+netless/
+*.log
+
+# --- Environment / Secrets ---
+.env
+.env.local
+.env.*.local
+*.local
+
+# --- OS Specific ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- IDE Settings ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+
+# --- Claude Code local state ---
+.claude/
+
+# --- Go snippet check scratch ---
+.snippet-check/
