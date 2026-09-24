@@ -27,7 +27,7 @@ for (const file of files) {
   // 組成「鏈」：package 區塊 + 後續的續上頁區塊
   const chains = []
   for (const b of blocks) {
-    if (b.code.startsWith(MARK) && chains.length && chains.at(-1).open) {
+    if (b.code.trimStart().startsWith(MARK) && chains.length && chains.at(-1).open) {
       chains.at(-1).parts.push(b)
     } else if (/^\s*package \w+/.test(b.code.replace(/^(\s*\/\/[^\n]*\n)+/, ''))) {
       chains.push({ parts: [b], open: true })
@@ -39,13 +39,13 @@ for (const file of files) {
   let changed = 0
   const replacements = new Map() // start → 新的程式碼
   for (const chain of chains) {
-    const joined = chain.parts.map(p => p.code).join('\n\n')
+    const joined = chain.parts.map((p, k) => (k === 0 ? '' : p.code.startsWith('\t') ? '\n' : '\n\n') + p.code).join('')
     const r = spawnSync('gofmt', [], { input: joined + '\n', encoding: 'utf8' })
     if (r.status !== 0) continue
     const out = r.stdout.replace(/\n$/, '').split('\n')
     const pieces = [[]]
     for (const l of out) {
-      if (l === MARK) pieces.push([])
+      if (l.trim() === MARK) pieces.push([])
       pieces.at(-1).push(l)
     }
     if (pieces.length !== chain.parts.length) continue

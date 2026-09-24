@@ -221,7 +221,8 @@ func main() {
 
 	fmt.Println(small, big, count)
 	fmt.Println(math.MaxInt8, math.MinInt8, math.MaxInt) // 各型別的上下限
-	fmt.Println(0b1010, 0o17, 0xFF)                      // 二、八、十六進位：10 15 255
+	// 二、八、十六進位：10 15 255
+	fmt.Println(0b1010, 0o17, 0xFF)
 
 	// total := big + count      // 編譯錯誤：int64 和 int 是不同型別
 	total := big + int64(count) // ✅ 明確轉型
@@ -289,7 +290,8 @@ func main() {
 	fmt.Println(a + b)      // 0.30000000000000004
 	fmt.Println(a+b == 0.3) // false ⚠️
 
-	const eps = 1e-9                     // 比較浮點數時，改用「差距夠小」來判斷
+	// 比較浮點數時，改用「差距夠小」來判斷
+	const eps = 1e-9
 	fmt.Println(math.Abs(a+b-0.3) < eps) // true
 }
 ```
@@ -320,7 +322,7 @@ package main
 import "fmt"
 
 func main() {
-	// var x int8 = 200   // 編譯錯誤：cannot use 200 (untyped int constant) as int8 value (overflows)
+	// var x int8 = 200 // 編譯錯誤：200 overflows int8
 
 	var u uint8 = 255
 	u++
@@ -395,10 +397,13 @@ import (
 
 func main() {
 	f := new(big.Int).MulRange(1, 30) // 30! = 1 × 2 × … × 30
-	fmt.Println(f)                    // 265252859812191058636308480000000
+	// 265252859812191058636308480000000
+	fmt.Println(f)
 
-	p := new(big.Int).Exp(big.NewInt(2), big.NewInt(100), nil) // 2 的 100 次方
-	fmt.Println(p)                                             // 1267650600228229401496703205376
+	// 2 的 100 次方
+	p := new(big.Int).Exp(big.NewInt(2), big.NewInt(100), nil)
+	// 1267650600228229401496703205376
+	fmt.Println(p)
 }
 ```
 
@@ -620,7 +625,8 @@ import (
 
 func main() {
 	line := "  name=Gopher, age=15  "
-	for part := range strings.SplitSeq(strings.TrimSpace(line), ",") { // Go 1.24+
+	// Go 1.24+
+	for part := range strings.SplitSeq(strings.TrimSpace(line), ",") {
 		key, value, _ := strings.Cut(strings.TrimSpace(part), "=")
 		fmt.Printf("%s → %s\n", key, value)
 	}
@@ -628,7 +634,7 @@ func main() {
 	n, _ := strconv.Atoi("15") // 字串 → 整數
 	s := strconv.Itoa(n + 1)   // 整數 → 字串
 	fmt.Println(s + "歲")       // 16歲
-	// fmt.Println(string(65))  // ⚠️ 得到 "A" 而不是 "65"，數字轉字串請用 strconv
+	// ⚠️ string(65) 得到 "A" 而不是 "65"，數字轉字串請用 strconv
 }
 ```
 
@@ -694,7 +700,8 @@ func main() {
 	fmt.Printf("%U %c\n", r, r) // U+8A9E 語
 
 	s := "Go語言"
-	fmt.Println(len(s), utf8.RuneCountInString(s)) // 8 4：位元組數 vs 字元數
+	// 8 4：位元組數 vs 字元數
+	fmt.Println(len(s), utf8.RuneCountInString(s))
 	runes := []rune(s)
 	fmt.Println(len(runes), string(runes[2])) // 4 語
 }
@@ -952,7 +959,8 @@ func stats(s string) {
 		}
 	}
 	fmt.Println("位元組：", len(s), "字元：", utf8.RuneCountInString(s))
-	fmt.Println("英文：", letters, "數字：", digits, "空白：", spaces, "中文：", han)
+	fmt.Printf("英文：%d 數字：%d 空白：%d 中文：%d\n",
+		letters, digits, spaces, han)
 	fmt.Println(strings.ToUpper(s))
 }
 

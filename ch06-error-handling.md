@@ -137,13 +137,15 @@ import "fmt"
 
 func main() {
 	count := "10"
-	total := count + 5 // 編譯錯誤：mismatched types string and untyped int
+	// 編譯錯誤：mismatched types string and untyped int
+	total := count + 5
 	fmt.Println(total)
 }
 ```
 
 ```text
-./main.go:7:11: invalid operation: count + 5 (mismatched types string and untyped int)
+./main.go:7:11: invalid operation: count + 5
+  (mismatched types string and untyped int)
 ```
 
 <!--
@@ -498,7 +500,8 @@ import (
 func parsePort(s string) (int, error) {
 	n, err := strconv.Atoi(s)
 	if err != nil {
-		return 0, fmt.Errorf("解析 port %q 失敗：%w", s, err) // 包裝錯誤，加上情境
+		// 包裝錯誤，加上情境
+		return 0, fmt.Errorf("解析 port %q 失敗：%w", s, err)
 	}
 	if n < 1 || n > 65535 {
 		return 0, fmt.Errorf("port %d 超出範圍", n) // 沒有要包裝時，不用 %w
@@ -508,8 +511,10 @@ func parsePort(s string) (int, error) {
 
 func main() {
 	_, err := parsePort("80a")
-	fmt.Println(err)                               // 解析 port "80a" 失敗：strconv.Atoi: parsing "80a": invalid syntax
-	fmt.Println(errors.Is(err, strconv.ErrSyntax)) // true：包裝後仍能判斷原始錯誤
+	// 解析 port "80a" 失敗：strconv.Atoi: parsing "80a": invalid syntax
+	fmt.Println(err)
+	// true：包裝後仍能判斷原始錯誤
+	fmt.Println(errors.Is(err, strconv.ErrSyntax))
 }
 ```
 
@@ -601,7 +606,7 @@ layout: default
 -->
 
 ---
-zoom: 0.91
+zoom: 0.88
 ---
 
 # 練習 1：解題提示
@@ -619,7 +624,9 @@ var ErrEmptyName = errors.New("名稱不可為空")
 
 type AgeError struct{ Age int }
 
-func (e *AgeError) Error() string { return fmt.Sprintf("年齡 %d 不合法", e.Age) }
+func (e *AgeError) Error() string {
+	return fmt.Sprintf("年齡 %d 不合法", e.Age)
+}
 
 func validate(name string, age int) error {
 	if name == "" {
@@ -716,7 +723,7 @@ panic 發生時，Go 會停止目前函式、往上一層一層執行每個函�
 -->
 
 ---
-zoom: 0.9
+zoom: 0.88
 ---
 
 # panic() 函式
@@ -739,7 +746,8 @@ func (l Level) Name() string {
 	case 3:
 		return "金"
 	}
-	panic(fmt.Sprintf("不存在的等級：%d", l)) // 理論上不該發生，代表程式有 bug
+	// 理論上不該發生，代表程式有 bug
+	panic(fmt.Sprintf("不存在的等級：%d", l))
 }
 
 func main() {
@@ -829,7 +837,8 @@ func safeDivide(a, b int) (result int, err error) {
 
 func main() {
 	fmt.Println(safeDivide(10, 2)) // 5 <nil>
-	fmt.Println(safeDivide(1, 0))  // 0 計算失敗：runtime error: integer divide by zero
+	// 0 計算失敗：runtime error: integer divide by zero
+	fmt.Println(safeDivide(1, 0))
 	fmt.Println("程式繼續執行")
 }
 ```
@@ -1060,7 +1069,8 @@ func parseAll(lines []string) (map[string]string, error) {
 }
 
 func main() {
-	cfg, err := parseAll([]string{"port=8080", "debug=true", "timeout=abc", "name"})
+	lines := []string{"port=8080", "debug=true", "timeout=abc", "name"}
+	cfg, err := parseAll(lines)
 	fmt.Println(cfg)
 	fmt.Println(err)
 	fmt.Println("包含格式錯誤？", errors.Is(err, ErrBadFormat)) // true

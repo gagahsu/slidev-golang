@@ -216,9 +216,11 @@ type Order struct {
 
 func main() {
 	o := Order{ID: 7, Item: "咖啡 ", Price: 60}
-	fmt.Printf("%v\n", o)                  // {7 咖啡  60 []}
-	fmt.Printf("%+v\n", o)                 // {ID:7 Item:咖啡  Price:60 Tags:[]}
-	fmt.Printf("%#v\n", o)                 // main.Order{ID:7, Item:"咖啡 ", Price:60, Tags:[]string(nil)}
+	fmt.Printf("%v\n", o) // {7 咖啡  60 []}
+	// {ID:7 Item:咖啡  Price:60 Tags:[]}
+	fmt.Printf("%+v\n", o)
+	// main.Order{ID:7, Item:"咖啡 ", Price:60, Tags:[]string(nil)}
+	fmt.Printf("%#v\n", o)
 	fmt.Printf("%q %T\n", o.Item, o.Price) // "咖啡 " float64
 }
 ```
@@ -267,11 +269,15 @@ import "fmt"
 
 func main() {
 	price := 1234.5678
-	fmt.Printf("[%f]\n", price)                    // [1234.567800]：預設 6 位小數
-	fmt.Printf("[%.1f]\n", price)                  // [1234.6]
-	fmt.Printf("[%e]\n", price)                    // [1.234568e+03]：科學記號
-	fmt.Printf("[%g]\n", 1234567.0)                // [1.234567e+06]：自動選擇較短的格式
-	fmt.Printf("[%10.2f|%-10.2f]\n", price, price) // [   1234.57|1234.57   ]
+	// [1234.567800]：預設 6 位小數
+	fmt.Printf("[%f]\n", price)
+	fmt.Printf("[%.1f]\n", price) // [1234.6]
+	// [1.234568e+03]：科學記號
+	fmt.Printf("[%e]\n", price)
+	// [1.234567e+06]：自動選擇較短的格式
+	fmt.Printf("[%g]\n", 1234567.0)
+	// [   1234.57|1234.57   ]
+	fmt.Printf("[%10.2f|%-10.2f]\n", price, price)
 
 	fmt.Printf("%.2f %.0f %.0f\n", 2.675, 2.5, 3.5) // 2.67 2 4 ⚠️
 }
@@ -372,7 +378,8 @@ func withComma(f float64) string {
 
 func main() {
 	fmt.Printf("%-10s%5d%10.2f\n", "Coffee", 2, 60.0)
-	fmt.Printf("%-10s%15s\n", "合計", withComma(1152.5)) // 合計           1,152.50
+	// 合計           1,152.50
+	fmt.Printf("%-10s%15s\n", "合計", withComma(1152.5))
 }
 ```
 
@@ -408,7 +415,7 @@ package main
 import "fmt"
 
 func discount(total int, isMember bool) int {
-	fmt.Printf("DEBUG discount() total=%d isMember=%t\n", total, isMember)
+	fmt.Printf("DEBUG discount() total=%d member=%t\n", total, isMember)
 	if isMember && total > 1000 {
 		total = total * 9 / 10
 	}
@@ -478,7 +485,8 @@ import (
 )
 
 func main() {
-	f, err := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	flag := os.O_CREATE | os.O_WRONLY | os.O_APPEND
+	f, err := os.OpenFile("app.log", flag, 0o644)
 	if err != nil {
 		log.Fatal(err) // main 裡啟動失敗，才適合用 Fatal
 	}
@@ -518,12 +526,13 @@ func main() {
 	slog.Info("使用者登入", "user", "alice", "id", 42)
 	// 2026/09/24 10:30:00 INFO 使用者登入 user=alice id=42
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug, // 設定最低輸出等級
-	}))
+	opts := &slog.HandlerOptions{Level: slog.LevelDebug} // 最低輸出等級
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, opts))
 	logger.Debug("查詢資料庫", "sql", "SELECT 1", "ms", 3)
-	logger.Error("付款失敗", "order", 7, slog.String("reason", "餘額不足"))
-	// {"time":"...","level":"ERROR","msg":"付款失敗","order":7,"reason":"餘額不足"}
+	logger.Error("付款失敗", "order", 7,
+		slog.String("reason", "餘額不足"))
+	// {"time":"...","level":"ERROR","msg":"付款失敗",
+	//  "order":7,"reason":"餘額不足"}
 }
 ```
 
@@ -548,7 +557,8 @@ slog.Info 後面第一個參數是訊息，後面接著成對的鍵和值。用 
 
 ```go
 slog.SetDefault(logger)                     // 設定全域預設的 logger
-reqLog := logger.With("request_id", "a1b2") // 附加固定欄位，之後每筆日誌都會帶著
+// 附加固定欄位，之後每筆日誌都會帶著
+reqLog := logger.With("request_id", "a1b2")
 reqLog.Info("處理請求")
 ```
 
@@ -608,7 +618,8 @@ func process(id, amount int) error {
 }
 
 func main() {
-	h := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
+	opts := &slog.HandlerOptions{Level: slog.LevelDebug}
+	h := slog.NewJSONHandler(os.Stdout, opts)
 	slog.SetDefault(slog.New(h))
 	for _, o := range [][2]int{{1, 300}, {2, 0}} {
 		if err := process(o[0], o[1]); err != nil {
@@ -797,7 +808,8 @@ zoom: 0.97
 go test -cover                        # 顯示覆蓋率
 # coverage: 100.0% of statements
 
-go test -coverprofile=c.out && go tool cover -html=c.out  # 用瀏覽器看哪些行沒被測到
+# 用瀏覽器看哪些行沒被測到
+go test -coverprofile=c.out && go tool cover -html=c.out
 ```
 
 ```go
@@ -816,7 +828,7 @@ func BenchmarkAverage(b *testing.B) {
 
 ```bash
 go test -bench=. -benchmem
-# BenchmarkAverage-8   	 2400000	       495.3 ns/op	       0 B/op	       0 allocs/op
+# BenchmarkAverage-8  2400000  495.3 ns/op  0 B/op  0 allocs/op
 ```
 
 <!--

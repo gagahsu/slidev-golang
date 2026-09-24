@@ -233,8 +233,11 @@ type Product struct {
 	cost float64 // 未匯出的欄位：外部看不到成本價
 }
 
-func WithTax(p float64) float64 { return round(p * (1 + TaxRate)) }      // ✅ 匯出
-func round(x float64) float64   { return float64(int(x*100+0.5)) / 100 } // 未匯出
+// ✅ 匯出
+func WithTax(p float64) float64 { return round(p * (1 + TaxRate)) }
+
+// 未匯出
+func round(x float64) float64 { return float64(int(x*100+0.5)) / 100 }
 ```
 
 <!--
@@ -265,7 +268,7 @@ import (
 func main() {
 	fmt.Println(pricing.WithTax(100)) // 105
 	fmt.Println(pricing.TaxRate)      // 0.05
-	// pricing.round(1.5)             // 編譯錯誤：undefined: pricing.round（未匯出）
+	// pricing.round(1.5) // 編譯錯誤：undefined（未匯出）
 }
 ```
 
@@ -366,7 +369,8 @@ go env GOROOT
 # /usr/local/go
 
 ls $(go env GOROOT)/src
-# bufio  bytes  context  crypto  encoding  errors  fmt  io  net  os  strings  time ...
+# bufio  bytes  context  crypto  encoding  errors
+# fmt  io  net  os  strings  time ...
 ```
 
 <div class="mt-4 p-3 bg-blue-50 border-l-4 border-blue-400 text-gray-700 text-sm text-left">
@@ -490,7 +494,8 @@ import (
 )
 
 func main() {
-	fmt.Println("訂單編號：", uuid.NewString()) // 例如 d6486408-e48f-41e4-aae2-9dee3d8da9c7
+	// 例如 d6486408-e48f-41e4-aae2-9dee3d8da9c7
+	fmt.Println("訂單編號：", uuid.NewString())
 }
 ```
 
@@ -586,7 +591,8 @@ import (
 
 func main() {
 	fmt.Println(rand.IntN(100)) // math/rand/v2：一般用途的亂數
-	fmt.Println(crand.Text())   // crypto/rand：密碼學安全的隨機字串（Go 1.24+）
+	// crypto/rand：密碼學安全的隨機字串（Go 1.24+）
+	fmt.Println(crand.Text())
 }
 ```
 

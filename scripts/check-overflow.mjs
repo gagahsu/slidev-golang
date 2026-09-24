@@ -24,12 +24,19 @@ for (let n = from; n <= Math.min(total, to); n++) {
       if (b.height > 0 && b.width > 0) maxBottom = Math.max(maxBottom, b.bottom)
     }
     const title = layout.querySelector('h1')?.textContent?.trim() ?? ''
-    return { over: Math.round(maxBottom - box.bottom), h: Math.round(box.height), title }
+    // 程式碼行被自動換行（太長）的數量
+    let wrapped = 0
+    for (const line of layout.querySelectorAll('pre code .line')) {
+      const lh = parseFloat(getComputedStyle(line).lineHeight) || 20
+      if (line.getBoundingClientRect().height > lh * 1.5) wrapped++
+    }
+    return { over: Math.round(maxBottom - box.bottom), h: Math.round(box.height), title, wrapped }
   }, n)
   if (r && r.over > 2) {
     bad++
     console.log(`第 ${n} 頁 超出 ${r.over}px（版面高 ${r.h}px）：${r.title}`)
   }
+  if (r && r.wrapped > 0) console.log(`第 ${n} 頁 有 ${r.wrapped} 行程式碼過長而換行：${r.title}`)
 }
 console.log(`檢查 ${from}～${Math.min(total, to)} 頁，${bad} 頁超出版面`)
 await browser.close()

@@ -220,7 +220,9 @@ func main() {
 	ctr.Inc()
 	fmt.Println(c.n) // 1
 
-	// var bad Counter = Clicks{} // 編譯錯誤：Clicks does not implement Counter (method Inc has pointer receiver)
+	// Clicks does not implement Counter
+	// (method Inc has pointer receiver)
+	// var bad Counter = Clicks{} // 編譯錯誤
 }
 ```
 
@@ -491,7 +493,7 @@ func main() {
 -->
 
 ---
-zoom: 0.96
+zoom: 0.93
 ---
 
 # 多型的實例：fmt.Stringer
@@ -511,11 +513,15 @@ func (m Money) String() string {
 
 type Temp float64
 
-func (t Temp) String() string { return fmt.Sprintf("%.1f°C", float64(t)) }
+func (t Temp) String() string {
+	return fmt.Sprintf("%.1f°C", float64(t))
+}
 
 func main() {
-	fmt.Println(Money(12345), Temp(36.55))                           // NT$123.45 36.5°C
-	fmt.Printf("%v | %s | %d\n", Money(500), Money(500), Money(500)) // %d 印出原始數值
+	// NT$123.45 36.5°C
+	fmt.Println(Money(12345), Temp(36.55))
+	// %d 印出原始數值
+	fmt.Printf("%v | %s | %d\n", Money(500), Money(500), Money(500))
 }
 ```
 
@@ -602,7 +608,8 @@ func (c Contractor) String() string { return c.Name + "(約聘)" }
 func payroll(staff []Payable) int {
 	total := 0
 	for _, s := range staff {
-		fmt.Printf("%v：%d\n", s, s.Pay()) // fmt 在執行時發現 s 也是 Stringer
+		// fmt 在執行時發現 s 也是 Stringer
+		fmt.Printf("%v：%d\n", s, s.Pay())
 		total += s.Pay()
 	}
 	return total
@@ -654,7 +661,8 @@ import (
 	"strings"
 )
 
-func writeReport(w io.Writer, title string, items []string) error { // 只要求「能寫入」
+// 只要求「能寫入」
+func writeReport(w io.Writer, title string, items []string) error {
 	if _, err := fmt.Fprintf(w, "== %s ==\n", title); err != nil {
 		return err
 	}
@@ -726,7 +734,8 @@ type Storage interface {
 	Load(key string) (string, bool)
 }
 
-type memStorage struct{ data map[string]string } // 小寫：外部看不到實作細節
+// 小寫：外部看不到實作細節
+type memStorage struct{ data map[string]string }
 
 func (m *memStorage) Save(k, v string) { m.data[k] = v }
 func (m *memStorage) Load(k string) (string, bool) {
@@ -839,7 +848,7 @@ describe 收到的是 Shape，一定能算面積。但有些形狀還能算周�
 -->
 
 ---
-zoom: 0.86
+zoom: 0.79
 ---
 
 # 型別 switch 處理多種介面與型別
@@ -869,7 +878,11 @@ func toText(v any) string {
 }
 
 func main() {
-	fmt.Println(toText(3*time.Second), toText(errors.New("逾時")), toText(42), toText(nil))
+	for _, v := range []any{
+		3 * time.Second, errors.New("逾時"), 42, nil,
+	} {
+		fmt.Println(toText(v))
+	}
 }
 ```
 
@@ -884,7 +897,7 @@ time.Duration 是標準函式庫的時間長度型別，它有 String 方法，�
 -->
 
 ---
-zoom: 0.89
+zoom: 0.87
 ---
 
 # 使用介面的注意事項：nil 介面陷阱
@@ -905,7 +918,8 @@ func check(fail bool) error {
 	if fail {
 		p = &MyErr{}
 	}
-	return p // ⚠️ 回傳的 error 介面：型別是 *MyErr，值是 nil → 介面「不是」nil
+	// ⚠️ 回傳的 error 介面：型別是 *MyErr，值是 nil → 介面「不是」nil
+	return p
 }
 
 func main() {
@@ -956,7 +970,8 @@ func Sum[T Number](nums []T) T {
 type Score int // 底層型別是 int，符合 ~int
 
 func main() {
-	fmt.Println(Sum([]int{1, 2, 3}), Sum([]float64{1.5, 2.5}), Sum([]Score{90, 85}))
+	fmt.Println(Sum([]int{1, 2, 3}), Sum([]float64{1.5, 2.5})) // 6 4
+	fmt.Println(Sum([]Score{90, 85}))                          // 175
 }
 ```
 
@@ -1078,7 +1093,8 @@ func name(m PaymentMethod) string {
 
 func main() {
 	card := &CreditCard{Limit: 1000}
-	fmt.Println(checkout(card, 800), checkout(card, 500)) // <nil> 信用卡 付款 500 元失敗：超過信用額度
+	// <nil> 信用卡 付款 500 元失敗：超過信用額度
+	fmt.Println(checkout(card, 800), checkout(card, 500))
 	refund(card, 800)
 	refund(Cash{}, 100)              // 現金 不支援退款
 	fmt.Println("剩餘額度：", card.Limit) // 剩餘額度： 1000

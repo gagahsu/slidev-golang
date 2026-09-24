@@ -147,7 +147,8 @@ func main() {
 	primes := [5]int{2, 3, 5, 7, 11}
 	days := [...]string{"一", "二", "三"} // ... 讓編譯器自己數長度
 
-	fmt.Println(scores, primes, days)   // [0 0 0] [2 3 5 7 11] [一 二 三]
+	// [0 0 0] [2 3 5 7 11] [一 二 三]
+	fmt.Println(scores, primes, days)
 	fmt.Println(len(primes), len(days)) // 5 3
 }
 ```
@@ -179,7 +180,8 @@ func main() {
 	fmt.Println(len(b), b)           // 3 [a  c]
 
 	week := [7]bool{5: true, 6: true} // 標記週末
-	fmt.Println(week)                 // [false false false false false true true]
+	// [false false false false false true true]
+	fmt.Println(week)
 }
 ```
 
@@ -211,7 +213,7 @@ func main() {
 	b := [3]int{1, 2, 3}
 	fmt.Println(a == b) // true：長度相同、元素都相等
 
-	// temps[3] = 0 // 編譯錯誤：invalid argument: index 3 out of bounds [0:3]
+	// temps[3] = 0 // 編譯錯誤：index 3 out of bounds
 }
 ```
 
@@ -359,8 +361,9 @@ func main() {
 	nums = append(nums, more...) // 用 ... 把切片「展開」
 	fmt.Println(nums)            // [1 2 3 4 5 6 7]
 
-	b := append([]byte("Go"), "語言"...) // 特例：字串可以展開附加到 []byte
-	fmt.Println(string(b))             // Go語言
+	// 特例：字串可以展開附加到 []byte
+	b := append([]byte("Go"), "語言"...)
+	fmt.Println(string(b)) // Go語言
 }
 ```
 
@@ -606,7 +609,8 @@ func main() {
 			passed = append(passed, s)
 		}
 	}
-	fmt.Println(len(passed), slices.Max(passed), slices.Min(passed)) // 5 100 64
+	// 5 100 64
+	fmt.Println(len(passed), slices.Max(passed), slices.Min(passed))
 
 	sorted := slices.Clone(scores)
 	slices.Sort(sorted)
@@ -657,7 +661,8 @@ func main() {
 	prices["綠茶"] = 35 // 新增
 	prices["咖啡"] = 65 // 修改：鍵已存在就覆蓋
 	stock["咖啡"] = 10
-	fmt.Println(prices, len(prices), stock) // map[咖啡:65 紅茶:30 綠茶:35] 3 map[咖啡:10]
+	// map[咖啡:65 紅茶:30 綠茶:35] 3 map[咖啡:10]
+	fmt.Println(prices, len(prices), stock)
 }
 ```
 
@@ -725,7 +730,8 @@ func main() {
 	for name, s := range scores { // ⚠️ 每次執行的順序都可能不同
 		fmt.Println(name, s)
 	}
-	for _, name := range slices.Sorted(maps.Keys(scores)) { // Go 1.23+：依鍵排序後走訪
+	// Go 1.23+：依鍵排序後走訪
+	for _, name := range slices.Sorted(maps.Keys(scores)) {
 		fmt.Print(name, "=", scores[name], " ")
 	}
 	fmt.Println() // Alice=92 Carol=88 Dave=60
@@ -958,9 +964,11 @@ type Product struct {
 }
 
 func main() {
-	p1 := Product{ID: 1, Name: "咖啡豆", Price: 450} // 用欄位名稱指定（建議）
-	p1.Tags = append(p1.Tags, "熱銷")               // 用 . 存取欄位
-	var p2 Product                                // 零值：每個欄位都是零值
+	// 用欄位名稱指定（建議）
+	p1 := Product{ID: 1, Name: "咖啡豆", Price: 450}
+	p1.Tags = append(p1.Tags, "熱銷") // 用 . 存取欄位
+	// 零值：每個欄位都是零值
+	var p2 Product
 	fmt.Printf("%+v\n%+v\n", p1, p2)
 }
 ```
@@ -1037,7 +1045,7 @@ func main() {
 	fmt.Println(a == b) // true
 
 	o1, o2 := Order{ID: 1}, Order{ID: 1}
-	// fmt.Println(o1 == o2) // 編譯錯誤：struct containing []string cannot be compared
+	// o1 == o2 // 編譯錯誤：切片欄位使結構無法比較
 	fmt.Println(o1.ID == o2.ID) // 改成比較需要的欄位
 }
 ```
@@ -1050,6 +1058,8 @@ struct 可以用 == 比較，Go 會逐個欄位比對，全部相等才是 true�
 這時候就要自己比較需要的欄位。第 19 章會介紹 reflect.DeepEqual，它可以深度比較任何值。
 -->
 
+---
+zoom: 0.96
 ---
 
 # 內嵌結構 (embedding)
@@ -1071,7 +1081,10 @@ type Customer struct {
 }
 
 func main() {
-	c := Customer{Name: "小明", Address: Address{City: "台北", Street: "信義路"}}
+	c := Customer{
+		Name:    "小明",
+		Address: Address{City: "台北", Street: "信義路"},
+	}
 	fmt.Println(c.City)         // 台北：直接存取被提升的欄位
 	fmt.Println(c.Address.City) // 台北：也可以寫完整路徑
 }
@@ -1219,7 +1232,8 @@ func (a *Account) String() string {
 func main() {
 	acc := &Account{Owner: "小明"}
 	acc.Deposit(1000)
-	fmt.Println(acc.Withdraw(300), acc.Withdraw(1000), acc) // true false 小明 的餘額：700
+	// true false 小明 的餘額：700
+	fmt.Println(acc.Withdraw(300), acc.Withdraw(1000), acc)
 }
 ```
 
@@ -1320,7 +1334,7 @@ func main() {
 	n, ok := box.(int) // comma ok：斷言失敗不會 panic
 	fmt.Println(n, ok) // 0 false
 
-	// m := box.(int) // ⚠️ panic: interface conversion: interface {} is string, not int
+	// m := box.(int) // ⚠️ panic：interface {} is string, not int
 }
 ```
 
@@ -1335,7 +1349,7 @@ any 就像一個萬用的收納箱，什麼型別的值都可以放進去。但�
 -->
 
 ---
-zoom: 0.9
+zoom: 0.88
 ---
 
 # 型別 switch
@@ -1363,7 +1377,9 @@ func describe(v any) string {
 }
 
 func main() {
-	fmt.Println(describe(21), describe("Go"), describe([]int{1, 2}), describe(nil), describe(3.14))
+	for _, v := range []any{21, "Go", []int{1, 2}, nil, 3.14} {
+		fmt.Println(describe(v))
+	}
 }
 ```
 

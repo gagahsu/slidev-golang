@@ -127,7 +127,8 @@ func main() {
 	for _, s := range scores { // 走訪切片
 		total += s
 	}
-	fmt.Printf("%s 的平均分數：%.2f\n", name, float64(total)/float64(len(scores)))
+	avg := float64(total) / float64(len(scores))
+	fmt.Printf("%s 的平均分數：%.2f\n", name, avg)
 }
 ```
 
@@ -293,7 +294,8 @@ var 的宣告可以省略型別或省略值，但不能兩個都省略。
 
 ```go
 var price = 5            // 推斷為 int
-total := price * 1.1     // 編譯錯誤：1.1 (untyped float constant) truncated to int
+// 編譯錯誤：1.1 (untyped float constant) truncated to int
+total := price * 1.1
 ```
 
 解法：**明確寫出型別**，或寫出正確形式的值

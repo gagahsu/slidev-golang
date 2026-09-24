@@ -318,7 +318,8 @@ func tempStats(temps []float64) (low, high, avg float64, err error) {
 
 func main() {
 	l, h, a, _ := tempStats([]float64{23.5, 28.1, 19.8, 31.2})
-	fmt.Printf("低 %.1f 高 %.1f 平均 %.1f\n", l, h, a) // 低 19.8 高 31.2 平均 25.7
+	// 低 19.8 高 31.2 平均 25.7
+	fmt.Printf("低 %.1f 高 %.1f 平均 %.1f\n", l, h, a)
 	if _, _, _, err := tempStats(nil); err != nil {
 		fmt.Println("錯誤：", err)
 	}
@@ -611,7 +612,8 @@ package main
 
 import "fmt"
 
-type Operation func(a, b int) int // 「接收兩個 int、回傳 int」的函式型別
+// 「接收兩個 int、回傳 int」的函式型別
+type Operation func(a, b int) int
 
 func main() {
 	var add Operation = func(a, b int) int { return a + b }
@@ -662,8 +664,10 @@ func filter(nums []int, keep Predicate) []int {
 func main() {
 	nums := []int{1, 2, 3, 4, 5, 6}
 	isEven := func(n int) bool { return n%2 == 0 }
-	fmt.Println(filter(nums, isEven))                            // [2 4 6]
-	fmt.Println(filter(nums, func(n int) bool { return n > 3 })) // [4 5 6]
+	// [2 4 6]
+	fmt.Println(filter(nums, isEven))
+	// [4 5 6]
+	fmt.Println(filter(nums, func(n int) bool { return n > 3 }))
 }
 ```
 
@@ -715,7 +719,7 @@ discountFor 根據會員等級，回傳一個對應的折扣函式。呼叫的�
 -->
 
 ---
-zoom: 0.83
+zoom: 0.81
 ---
 
 # 補充：泛型函式（Go 1.18+）
@@ -745,7 +749,9 @@ func Largest[T cmp.Ordered](a, b T) T { // T 必須可以比大小
 }
 
 func main() {
-	fmt.Println(Filter([]string{"go", "java", "rust"}, func(s string) bool { return len(s) == 4 }))
+	langs := []string{"go", "java", "rust"}
+	len4 := func(s string) bool { return len(s) == 4 }
+	fmt.Println(Filter(langs, len4))
 	fmt.Println(Largest(3, 7), Largest("apple", "banana")) // 7 banana
 }
 ```
@@ -776,7 +782,8 @@ import (
 	"iter"
 )
 
-func Countdown(n int) iter.Seq[int] { // iter.Seq[int] = func(yield func(int) bool)
+// iter.Seq[int] = func(yield func(int) bool)
+func Countdown(n int) iter.Seq[int] {
 	return func(yield func(int) bool) {
 		for i := n; i > 0; i-- {
 			if !yield(i) { // 呼叫端 break 時，yield 會回傳 false
@@ -1052,7 +1059,8 @@ import (
 func saveOrder(id int) (err error) {
 	defer func() {
 		if err != nil {
-			err = fmt.Errorf("儲存訂單 %d 失敗：%w", id, err) // 在回傳前補充錯誤資訊
+			// 在回傳前補充錯誤資訊
+			err = fmt.Errorf("儲存訂單 %d 失敗：%w", id, err)
 		}
 	}()
 	if id <= 0 {

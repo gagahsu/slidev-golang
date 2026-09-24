@@ -2,7 +2,7 @@
 //
 // 規則：
 //   - 只檢查以 `package` 開頭（前面可有註解）、可獨立編譯的 ```go 區塊（片段程式碼不檢查）
-//   - 程式碼行尾有 `// 編譯錯誤` 標記者略過（刻意示範錯誤的程式碼；註解掉的行不算）
+//   - 有 `// 編譯錯誤` 標記（行尾或獨立一行）的區塊略過（刻意示範錯誤的程式碼；註解掉的程式碼行不算）
 //   - import 了第三方模組或範例模組（github.com／golang.org／gopkg.in／example.com）的區塊略過
 //   - import 了 "testing" 的區塊會存成 x_test.go
 //   - 第一行是 `// 檔名：xxx.go` 的區塊，會和同檔案上一個區塊放在同一個套件資料夾（例如程式 + 測試檔）
@@ -12,6 +12,7 @@
 //       pnpm check:go ch05       （只檢查 ch05）
 //       pnpm check:go ch05 --run （檢查後逐一執行，印出輸出）
 // 可用 GOTOOLCHAIN 環境變數指定 Go 版本，例如 GOTOOLCHAIN=go1.27.0 pnpm check:go
+// WITH_DEPS=1：一併檢查使用第三方模組的區塊（會執行 go mod tidy 下載相依模組）
 import { readdirSync, readFileSync, mkdirSync, writeFileSync, rmSync } from 'fs'
 import { spawnSync } from 'child_process'
 import { join } from 'path'
@@ -37,7 +38,10 @@ let count = 0
 let skipped = 0
 
 const blocks = [] // { files: [{ name, code }], where }
-const skipRe = /import[\s\S]*?"(github\.com|golang\.org|gopkg\.in|example\.com)\//
+const withDeps = process.env.WITH_DEPS === '1'
+const skipRe = withDeps
+  ? /import[\s\S]*?"example\.com\//
+  : /import[\s\S]*?"(github\.com|golang\.org|gopkg\.in|example\.com)\//
 const stripComments = code => code.replace(/^(\s*\/\/[^\n]*\n)+/, '')
 
 for (const file of files) {
@@ -51,11 +55,11 @@ for (const file of files) {
     const code = lines.slice(start, end).join('\n')
     i = end
     if (/^\s*\/\/ 續上頁/.test(code)) {
-      if (last) last.files.at(-1).code += '\n\n' + code
+      if (last) last.files.at(-1).code += (code.startsWith('\t') ? '\n' : '\n\n') + code // 以 Tab 縮排的續上頁：函式本體中途接續
       continue
     }
     if (!/^\s*package \w+/.test(stripComments(code))) continue
-    if (/^\s*[^\s/].*\/\/\s*編譯錯誤/m.test(code) || skipRe.test(code)) {
+    if (/^\s*([^\s/].*)?\/\/\s*編譯錯誤/m.test(code) || skipRe.test(code)) {
       skipped++
       last = null
       continue
@@ -81,6 +85,10 @@ for (const b of blocks) {
 }
 
 console.log(`檢查 ${count} 個程式碼區塊（略過 ${skipped} 個）...`)
+if (withDeps) {
+  const tidy = spawnSync('go', ['mod', 'tidy'], { cwd: work, encoding: 'utf8' })
+  if (tidy.status !== 0) console.error(tidy.stderr)
+}
 const res = spawnSync('go', ['vet', './...'], { cwd: work, encoding: 'utf8' })
 const out = (res.stdout + res.stderr).replace(/(?:\.\/)?(s\d{4})\/(\w+\.go)?/g,
   (m, dir) => origin.has(dir) ? `[${origin.get(dir)}] ` : m)
@@ -106,7 +114,7 @@ if (run) {
     const hasTest = names.some(n => n.endsWith('_test.go'))
     if (!hasTest && (!/^package main\b/m.test(src) || !/func main\(\)/.test(src))) continue
     const cmd = hasTest ? ['test', '-v', `./${dir}`] : ['run', `./${dir}`]
-    const r = spawnSync('go', cmd, { cwd: work, encoding: 'utf8', timeout: 60000 })
+    const r = spawnSync('go', cmd, { cwd: work, encoding: 'utf8', timeout: 10000 })
     console.log(`\n── ${where}`)
     console.log((r.stdout + r.stderr).trimEnd())
   }
