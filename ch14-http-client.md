@@ -204,6 +204,8 @@ class: flex flex-col justify-center items-center text-center
 -->
 
 ---
+zoom: 0.91
+---
 
 # 使用 http.Get() 發送 GET 請求
 
@@ -246,6 +248,8 @@ resp.StatusCode 是數字的狀態碼，resp.Status 是文字的狀態；resp.He
 -->
 
 ---
+zoom: 0.9
+---
 
 # 使用 http.Get 的注意事項：檢查狀態碼
 
@@ -287,6 +291,8 @@ Go 的設計是：只要伺服器有回應，就不算錯誤，不管狀態碼�
 查詢一個不存在的 repository，GitHub 會回傳 404，我們把它轉換成一個清楚的錯誤訊息。
 -->
 
+---
+zoom: 0.79
 ---
 
 # 取得並解析伺服器的 JSON 資料
@@ -334,6 +340,8 @@ func main() {
 這裡改用自訂的 client，設定了 10 秒逾時。為了投影片精簡，省略了狀態碼檢查，實際寫程式時要加上。
 -->
 
+---
+zoom: 0.9
 ---
 
 # 加上查詢參數：url.Values
@@ -439,6 +447,8 @@ client 宣告成套件層級的變數，整個程式共用同一個。
 -->
 
 ---
+zoom: 0.81
+---
 
 # 練習 1：解題提示（續）
 ### 提示說明
@@ -526,7 +536,20 @@ func main() {
 		panic(err)
 	}
 	defer resp.Body.Close()
+```
 
+<!--
+POST 請求要送出資料，資料放在請求的本體裡。
+
+http.Post 需要三個參數：網址、內容類型、本體。送 JSON 的時候，內容類型是 application/json，告訴伺服器「本體是 JSON 格式」。本體的型別是 io.Reader，所以先用 json.Marshal 編碼成 []byte，再用 bytes.NewReader 包裝成 Reader。
+-->
+
+---
+
+# 送出 POST 請求並接收回應（續）
+
+```go
+	// 續上頁
 	var echo struct {
 		// httpbin 會把收到的 JSON 放在 "json" 欄位回傳
 		JSON Order `json:"json"`
@@ -537,15 +560,13 @@ func main() {
 ```
 
 <!--
-POST 請求要送出資料，資料放在請求的本體裡。
-
-http.Post 需要三個參數：網址、內容類型、本體。送 JSON 的時候，內容類型是 application/json，告訴伺服器「本體是 JSON 格式」。本體的型別是 io.Reader，所以先用 json.Marshal 編碼成 []byte，再用 bytes.NewReader 包裝成 Reader。
-
 httpbin.org/post 會把收到的內容原封不動回傳，送出的 JSON 會放在回應的 json 欄位裡。我們解析出來，確認伺服器確實收到了我們送的訂單。
 
 這裡用了一個匿名結構 echo，只取回應中需要的欄位。
 -->
 
+---
+zoom: 0.88
 ---
 
 # 送出表單資料：http.PostForm
@@ -587,6 +608,8 @@ http.PostForm 接收一個 url.Values，會自動編碼成表單格式，並設�
 httpbin 會把收到的表單放在 form 欄位回傳。下一章寫 HTTP 伺服器的時候，會學到伺服器這一端怎麼讀取表單資料。
 -->
 
+---
+zoom: 0.86
 ---
 
 # 用 POST 請求上傳檔案：multipart/form-data
@@ -671,7 +694,19 @@ type Report struct {
 	Items   []string `json:"items"`
 	Total   int      `json:"total"`
 }
+```
 
+<!--
+Report 結構加上 JSON 標籤，使用 snake_case 的鍵名稱。
+-->
+
+---
+
+# 練習 2：解題提示（續）
+### 提示說明
+
+```go
+// 續上頁
 func postJSON(c *http.Client, url string,
 	v any) (map[string]any, error) {
 	b, err := json.Marshal(v)
@@ -701,7 +736,7 @@ postJSON 依序做：編碼成 JSON、送出、defer 關閉、檢查狀態碼、
 
 ---
 
-# 練習 2：解題提示（續）
+# 練習 2：解題提示（續 2）
 ### 提示說明
 
 ```go
@@ -742,6 +777,8 @@ class: flex flex-col justify-center items-center text-center
 最後學怎麼自訂請求：設定標頭、設定逾時、使用其他 HTTP 方法。
 -->
 
+---
+zoom: 0.91
 ---
 
 # 建立自訂請求：http.NewRequestWithContext
@@ -796,7 +833,22 @@ func main() {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "goshop-client/1.0")
 	req.Header.Set("X-Request-Id", "a1b2c3")
+```
 
+<!--
+這段程式碼的目的，是送出一個帶有自訂標頭的請求，並透過 httpbin 確認伺服器真的收到了這些標頭。
+
+NewRequestWithContext 的第一個參數是 context，這裡設定了 5 秒逾時。方法用 http.MethodGet 常數，比直接寫字串 "GET" 不容易打錯。GET 沒有本體，所以最後一個參數是 nil。
+
+接著用 Header.Set 設定三個標頭，X- 開頭的是自訂標頭的慣例寫法。
+-->
+
+---
+
+# 自訂標頭 — 範例（續）
+
+```go
+	// 續上頁
 	resp, err := http.DefaultClient.Do(req) // 逾時由 ctx 控制
 	if err != nil {
 		panic(err)
@@ -810,11 +862,7 @@ func main() {
 ```
 
 <!--
-這段程式碼的目的，是送出一個帶有自訂標頭的請求，並透過 httpbin 確認伺服器真的收到了這些標頭。
-
-NewRequestWithContext 的第一個參數是 context，這裡設定了 5 秒逾時。方法用 http.MethodGet 常數，比直接寫字串 "GET" 不容易打錯。GET 沒有本體，所以最後一個參數是 nil。
-
-接著用 Header.Set 設定三個標頭，X- 開頭的是自訂標頭的慣例寫法。然後用 client.Do 送出。這裡用 DefaultClient 也沒關係，因為逾時已經由 context 控制了。
+然後用 client.Do 送出。這裡用 DefaultClient 也沒關係，因為逾時已經由 context 控制了。
 
 httpbin.org/headers 會把收到的標頭回傳，印出來可以看到 goshop-client/1.0 和 a1b2c3。
 -->
@@ -877,6 +925,8 @@ layout: default
 -->
 
 ---
+zoom: 0.77
+---
 
 # 綜合練習：解題提示
 ### 提示說明
@@ -920,6 +970,8 @@ NewGitHubClient 是建構函式，建立一個設定好逾時的 http.Client。�
 -->
 
 ---
+zoom: 0.86
+---
 
 # 綜合練習：解題提示（續）
 ### 提示說明
@@ -960,6 +1012,8 @@ token 不是空字串才設定 Authorization 標頭。狀態碼用無條件 swit
 參數 v 的型別是 any，呼叫端傳入任何 struct 的指標，都能解析進去。
 -->
 
+---
+zoom: 0.97
 ---
 
 # 綜合練習：解題提示（續 2）

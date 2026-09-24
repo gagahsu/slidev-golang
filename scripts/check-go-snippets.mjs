@@ -5,7 +5,7 @@
 //   - 有 `// 編譯錯誤` 標記（行尾或獨立一行）的區塊略過（刻意示範錯誤的程式碼；註解掉的程式碼行不算）
 //   - import 了第三方模組或範例模組（github.com／golang.org／gopkg.in／example.com）的區塊略過
 //   - import 了 "testing" 的區塊會存成 x_test.go
-//   - 第一行是 `// 檔名：xxx.go` 的區塊，會和同檔案上一個區塊放在同一個套件資料夾（例如程式 + 測試檔）
+//   - 第一行是 `// 檔名：xxx.go` 的區塊，會和同檔案中前一個「也有檔名」的區塊放在同一個套件資料夾（多檔案專案、程式 + 測試檔）
 //   - 第一行是 `// 續上頁` 的區塊，會接在同檔案上一個區塊後面一起檢查（跨頁的長程式）
 //
 // 用法：pnpm check:go            （檢查全部章節）
@@ -72,11 +72,11 @@ for (const file of files) {
     const name = named ? named[1].split('/').pop()
       : code.includes('"testing"') ? 'x_test.go' : 'main.go'
     const pkgOf = c => stripComments(c).match(/^\s*package (\w+)/)?.[1]
-    if (named && last && pkgOf(last.files[0].code) === pkgOf(code) && !last.files.some(f => f.name === name)) {
+    if (named && last?.named && pkgOf(last.files[0].code) === pkgOf(code) && !last.files.some(f => f.name === name)) {
       last.files.push({ name, code }) // 同一個套件的另一個檔案（例如測試檔）
       continue
     }
-    last = { files: [{ name, code }], where: `${file}:${start}` }
+    last = { files: [{ name, code }], where: `${file}:${start}`, named: Boolean(named) }
     blocks.push(last)
   }
 }
@@ -85,6 +85,15 @@ for (const b of blocks) {
   const dir = `s${String(++count).padStart(4, '0')}`
   mkdirSync(join(work, dir))
   for (const f of b.files) writeFileSync(join(work, dir, f.name), rewrite(f.code) + '\n')
+  // //go:embed 需要的檔案：建立空的佔位檔案，讓範例可以編譯
+  for (const f of b.files) {
+    for (const [, pat] of f.code.matchAll(/^\/\/go:embed (\S+)/gm)) {
+      const target = join(work, dir, pat.includes('*') ? pat.slice(0, pat.lastIndexOf('/')) : pat)
+      mkdirSync(target, { recursive: true })
+      const ext = pat.includes('*.') ? pat.slice(pat.lastIndexOf('.')) : '.html'
+      writeFileSync(join(target, 'placeholder' + ext), '')
+    }
+  }
   origin.set(dir, b.where)
 }
 
@@ -113,12 +122,16 @@ for (const f of unformatted) {
 // --run：實際執行每個 main 程式並印出輸出，方便對照投影片上標註的結果
 if (run) {
   for (const [dir, where] of origin) {
-    const names = readdirSync(join(work, dir))
+    const names = readdirSync(join(work, dir)).filter(n => n.endsWith('.go'))
     const src = names.map(n => readFileSync(join(work, dir, n), 'utf8')).join('\n')
     const hasTest = names.some(n => n.endsWith('_test.go'))
     if (!hasTest && (!/^package main\b/m.test(src) || !/func main\(\)/.test(src))) continue
-    const cmd = hasTest ? ['test', '-v', `./${dir}`] : ['run', `./${dir}`]
-    const r = spawnSync('go', cmd, { cwd: work, encoding: 'utf8', timeout: 10000 })
+    // 先編譯再執行，逾時（例如伺服器程式）時直接結束執行檔，不留下背景程序
+    const bin = join(work, dir, 'app.bin')
+    const r = hasTest
+      ? spawnSync('go', ['test', '-v', `./${dir}`], { cwd: work, encoding: 'utf8', timeout: 60000 })
+      : (spawnSync('go', ['build', '-o', bin, `./${dir}`], { cwd: work }),
+        spawnSync(bin, [], { cwd: join(work, dir), encoding: 'utf8', timeout: 5000 }))
     console.log(`\n── ${where}`)
     console.log((r.stdout + r.stderr).trimEnd())
   }
